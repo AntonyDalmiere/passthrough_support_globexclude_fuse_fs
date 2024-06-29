@@ -1,0 +1,18 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "mount .grive under X:",
+            "type": "shell",
+            "command": "python3.exe main.py X: \"C:\\Users\\Anto\\.gdrive\" --use-cache --patterns '**/.venv/*' '**/node_modules/*' '**/.cache/'"
+        },
+        {
+            "label": "Kill python",
+            "type": "shell",
+            "command": "taskkill.exe /F /IM \"python*\"",
+            "problemMatcher": []
+        }
+    ]
+}
