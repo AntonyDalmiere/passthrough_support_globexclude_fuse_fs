@@ -343,30 +343,27 @@ class PassthroughFS(LoggingMixIn,Operations):
         if not self.patterns:
             return False
         print("Check file {} and result is {}".format(path,glob_match(path, self.patterns)))
-        return self.patterns and glob_match(path, self.patterns)
+        return glob_match(path, self.patterns)
 
     
+
+
+def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
+    if patterns:
+        print("Excluded patterns: ", patterns)
+    
+    if not cache_dir:
+        cache_dir = os.path.join(user_cache_dir("PassthroughFS"), base64.b64encode(root.encode()).decode())
+    
+    os.makedirs(name=cache_dir, exist_ok=True)
+    print("Using cache directory:", cache_dir)
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint, foreground=True, allow_other=True, uid=-1, nothreads=True)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PassthroughFS")
     parser.add_argument("mountpoint", help="Mount point for the filesystem")
     parser.add_argument("root", help="Root directory for the filesystem")
     parser.add_argument("--patterns", nargs="*", help="Exclude patterns")
     parser.add_argument("--cache-dir", help="Cache directory")
-    parser.add_argument("--use-cache", action="store_true", help="Use cache for excluded files")
     args = parser.parse_args()
-
-    if args.patterns:
-        print("Excluded patterns: ", args.patterns)
-
-    if args.use_cache:
-        if args.cache_dir:
-            cache_dir = args.cache_dir
-        else:
-            cache_dir = os.path.join(user_cache_dir("PassthroughFS"), base64.b64encode(args.root.encode()).decode())
-            os.makedirs(name=cache_dir, exist_ok=True)
-        print("Using cache directory:", cache_dir)
-    else:
-        cache_dir = None
-
-    # logging.basicConfig(level=logging.DEBUG)
-    fuse = FUSE(PassthroughFS(args.root, args.patterns, cache_dir), args.mountpoint, foreground=True, allow_other=True,uid=-1,nothreads=True)
+    start_passthrough_fs(args.mountpoint, args.root, args.patterns, args.cache_dir)
