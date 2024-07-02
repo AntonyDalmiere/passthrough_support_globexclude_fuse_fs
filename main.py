@@ -42,6 +42,7 @@ class PassthroughFS(LoggingMixIn,Operations):
                 raise FuseOSError(errno.EACCES)
         else:
             raise FuseOSError(errno.ENOENT)
+        return 0
 
     def getattr(self, path, fh=None):
         full_path = self.get_full_path(path)
