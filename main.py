@@ -88,6 +88,9 @@ class PassthroughFS(LoggingMixIn,Operations):
     def read(self, path, length, offset, fh):
         print({key: str(value) for key, value in self.file_handles.items()}, flush=True)
 
+        if(self.access(path, os.R_OK) != 0):
+            raise FuseOSError(errno.EACCES)
+        
         target_path = self.get_full_path(path) if os.path.exists(self.get_full_path(path)) else self.get_cache_path(path)
 
         if os.path.exists(target_path):
