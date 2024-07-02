@@ -340,6 +340,8 @@ class PassthroughFS(LoggingMixIn,Operations):
         return str(p)
 
     def is_excluded(self, path):
+        if not self.patterns:
+            return False
         print("Check file {} and result is {}".format(path,glob_match(path, self.patterns)))
         return self.patterns and glob_match(path, self.patterns)
 
