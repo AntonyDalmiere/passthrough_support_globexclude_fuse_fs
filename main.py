@@ -85,12 +85,9 @@ class PassthroughFS(LoggingMixIn,Operations):
         #Append fh to file_handles
         exposed_fh = max(self.file_handles.keys()) + 1 if self.file_handles else 0
         self.file_handles[exposed_fh] = fh
-        print({key: str(value) for key, value in self.file_handles.items()}, flush=True)
         return exposed_fh
     
     def read(self, path, length, offset, fh):
-        print({key: str(value) for key, value in self.file_handles.items()}, flush=True)
-
         if(self.access(path, os.R_OK) != 0):
             raise FuseOSError(errno.EACCES)
         
@@ -110,9 +107,6 @@ class PassthroughFS(LoggingMixIn,Operations):
             raise FuseOSError(errno.ENOENT)
 
     def write(self, path, buf, offset, fh):
-        print(f"Write operation: path={path}, offset={offset}, fh={fh}", flush=True)
-        print({key: str(value) for key, value in self.file_handles.items()}, flush=True)
-
         if fh not in self.file_handles:
             raise KeyError(f"File handle {fh} not found")
 
@@ -130,7 +124,6 @@ class PassthroughFS(LoggingMixIn,Operations):
                     raise IOError("Failed to write entire buffer") 
                 total_written += written
 
-        print(f"Syncing file handle {fh} with real_fh {self.file_handles[fh].real_fh}", flush=True)
         os.fsync(self.file_handles[fh].real_fh)
         return total_written
     
@@ -221,7 +214,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         corresponded_file_handles = [fh for fh in self.file_handles if self.file_handles[fh].path == full_path or self.file_handles[fh].path == cache_path]
 
         for fh in corresponded_file_handles:
-            print(f"Unlinking file handle {fh}", flush=True)
             self.release(path, fh)
 
         if os.path.exists(full_path):
@@ -245,15 +237,10 @@ class PassthroughFS(LoggingMixIn,Operations):
         cache_path_old = self.get_cache_path(old)
         cache_path_new = self.get_cache_path(new)
 
-        print(psutil.Process().open_files(), flush=True)
-
         corresponded_file_handles = [fh for fh in self.file_handles if self.file_handles[fh].path == full_path_old or self.file_handles[fh].path == cache_path_old]
 
         for fh in corresponded_file_handles:
-            print(f"Releasing file handle {fh} before renaming", flush=True)
             self.release(old, fh)
-            print(f"Renaming file handle {fh}", flush=True)
-            print(psutil.Process().open_files(), flush=True)
 
         if os.path.exists(full_path_old):
             if self.is_excluded(new):
@@ -318,12 +305,10 @@ class PassthroughFS(LoggingMixIn,Operations):
     def release(self, path, fh):
         if fh in self.file_handles:
             try:
-                print(f"Releasing file handle {fh} with path {self.file_handles[fh].path} and real_fh {self.file_handles[fh].real_fh}", flush=True)
                 os.close(self.file_handles[fh].real_fh)
             except OSError as e:
                 if e.errno != errno.EBADF:
                     raise
-            print(f"Deleting file handle {fh} from file_handles", flush=True)
             del self.file_handles[fh]
         else:
             print(f"File handle {fh} not found in file_handles", flush=True)
@@ -346,7 +331,6 @@ class PassthroughFS(LoggingMixIn,Operations):
     def is_excluded(self, path):
         if not self.patterns:
             return False
-        print("Check file {} and result is {}".format(path,glob_match(path, self.patterns)))
         return glob_match(path, self.patterns)
 
     
