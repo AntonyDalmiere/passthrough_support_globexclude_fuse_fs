@@ -78,7 +78,10 @@ class PassthroughFS(LoggingMixIn,Operations):
         elif os.path.exists(cache_path):
             fh: FileHandle = FileHandle(cache_path,os.open(cache_path,flags))
         else:
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+                if flags & os.O_CREAT:
+                    return self.create(path, 0o777)
+                else:
+                    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         #Append fh to file_handles
         exposed_fh = max(self.file_handles.keys()) + 1 if self.file_handles else 0
         self.file_handles[exposed_fh] = fh
@@ -289,12 +292,13 @@ class PassthroughFS(LoggingMixIn,Operations):
         if self.is_excluded(path):
             cache_path = self.get_cache_path(path)
             os.makedirs(os.path.dirname(cache_path), exist_ok=True)     
-            fd = os.open(cache_path, os.O_WRONLY | os.O_CREAT, mode)
+            fd = os.open(cache_path, os.O_RDWR | os.O_CREAT, mode)
             new_fd_id = max(self.file_handles.keys()) + 1 if self.file_handles else 0
             self.file_handles[new_fd_id] = FileHandle(cache_path,fd)
         else:
             full_path = self.get_full_path(path)
-            fd = os.open(full_path, os.O_WRONLY | os.O_CREAT, mode)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            fd = os.open(full_path, os.O_RDWR | os.O_CREAT, mode)
             new_fd_id = max(self.file_handles.keys()) + 1 if self.file_handles else 0
             self.file_handles[new_fd_id] = FileHandle(full_path,fd)
         return new_fd_id
