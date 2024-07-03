@@ -160,7 +160,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.mounted_dir = determine_mountdir_based_on_os()
         print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
         # Create a new process to launch the function start_passthrough_fs
-        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt'], self.cache_dir))
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*'], self.cache_dir))
         self.p.start()
         time.sleep(5)
         
@@ -197,6 +197,38 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             data = f.read()
         self.assertEqual(data, 'test data')
 
+    #same as test_read_file with file nested in excluded folder formated as : 'mounted_dir' = 'excluded pattern' = 'file.a'
+    def test_read_file_complexpath(self):
+        file_path1 = os.path.join(self.mounted_dir, 'testfile.txt', 'file.a')
+        #create the path to this file
+        os.makedirs(os.path.dirname(file_path1), exist_ok=True)
+        with open(file_path1, 'w') as f:
+            f.write('test data')
+        file_path2 = os.path.join(self.mounted_dir, 'testfile.txt', 'file.a')
+        with open(file_path2, 'r') as f:
+            data = f.read()
+        self.assertEqual(data, 'test data')
+
+    def test_write_file_complexpathexcluded_is_written_goodplace(self):
+        file_path1 = os.path.join(self.mounted_dir, 'testfile.txt', 'file.a')
+        #create the path to this file
+        os.makedirs(os.path.dirname(file_path1), exist_ok=True)
+        with open(file_path1, 'w') as f:
+            f.write('test data')
+        file_path2: str = os.path.join(self.temp_dir, 'testfile.txt', 'file.a')
+        self.assertFalse(os.path.exists(file_path2))
+
+    def test_write_file_complexpathexcluded_is_written_goodplace2(self):
+        file_path1 = os.path.join(self.mounted_dir, 'testfile.txt', 'file.a')
+        #create the path to this file
+        os.makedirs(os.path.dirname(file_path1), exist_ok=True)
+        with open(file_path1, 'w') as f:
+            f.write('test data')
+        file_path2 = os.path.join(self.cache_dir, 'testfile.txt', 'file.a')
+        with open(file_path2, 'r') as f:
+            data = f.read()
+        self.assertEqual(data, 'test data')
+        
     def test_write_file_tocache(self):
         file_path1 = os.path.join(self.cache_dir, 'testfile.txt')
         with open(file_path1, 'w') as f:
@@ -252,6 +284,8 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         #remove the temporary directories even if they are not empty
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         shutil.rmtree(self.cache_dir, ignore_errors=True)
+  
         shutil.rmtree(self.mounted_dir, ignore_errors=True)
+
 if __name__ == '__main__':
     unittest.main()
