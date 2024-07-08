@@ -240,38 +240,65 @@ class PassthroughFS(LoggingMixIn,Operations):
 
 
     def rename(self, old, new):
-        full_path_old = self.get_full_path(old)
-        full_path_new = self.get_full_path(new)
-        cache_path_old = self.get_cache_path(old)
-        cache_path_new = self.get_cache_path(new)
+        # Check if the source exists
+        if(self.access(old, os.R_OK) != 0):
+            raise FileNotFoundError(f"No such file or directory: '{old}'")
 
-        corresponded_file_handles = [fh for fh in self.file_handles if self.file_handles[fh].path == full_path_old or self.file_handles[fh].path == cache_path_old]
+        # # self.access must throw an exception, lese stop the function with an exception 
+        try:
+            if self.access(new, os.R_OK) == 0:
+                raise FuseOSError(errno.EEXIST)
+        except FuseOSError:
+            pass
 
-        for fh in corresponded_file_handles:
-            self.release(old, fh)
+        def recursive_copy(old_path, new_path):
+            # If it's a directory, create the new directory and copy contents
+            if stat.S_ISDIR(self.getattr(old_path)['st_mode']):  # Directory
+                self.mkdir(new_path, self.getattr(old_path)['st_mode'])
+                for item in self.readdir(old_path,None):
+                    if item not in ['.', '..']:
+                        recursive_copy(os.path.join(old_path, item), os.path.join(new_path, item))
+            elif stat.S_ISLNK(self.getattr(old_path)['st_mode']):  # Symlink
+                # get right source of the symlinls
+                source_path = self.get_full_path(old_path) if os.path.exists(self.get_full_path(old_path)) else self.get_cache_path(old_path)
+                destination_path = self.get_full_path(new_path) if not self.is_excluded(new_path) else self.get_cache_path(new_path)
+                os.rename(source_path, destination_path)
+            
+            else:  # File
+                # Create the new file
+                new_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
+                
+                # Open the old file
+                old_fh = self.open(old_path, os.O_RDONLY)
+                
+                # Read from old and write to new
+                buffer_size = 4096
+                offset = 0
+                while True:
+                    data = self.read(old_path, buffer_size, offset, old_fh)
+                    if not data:
+                        break
+                    self.write(new_path, data, offset, new_fh)
+                    offset += len(data)
+                
+                # Close both files
+                self.release(old_path, old_fh)
+                self.release(new_path, new_fh)
 
-        if os.path.exists(full_path_old):
-            if self.is_excluded(new):
-                shutil.move(full_path_old, cache_path_new)
-                for fh in corresponded_file_handles:
-                    self.file_handles[fh] = FileHandle(cache_path_new, os.open(cache_path_new, os.O_RDWR))
-            else:
-                shutil.move(full_path_old, full_path_new)
-                for fh in corresponded_file_handles:
-                    self.file_handles[fh] = FileHandle(full_path_new, os.open(full_path_new, os.O_RDWR))
-        elif os.path.exists(cache_path_old):
-            if self.is_excluded(new):
-                shutil.move(cache_path_old, cache_path_new)
-                for fh in corresponded_file_handles:
-                    self.file_handles[fh] = FileHandle(cache_path_new, os.open(cache_path_new, os.O_RDWR))
-            else:
-                shutil.move(cache_path_old, full_path_new)
-                for fh in corresponded_file_handles:
-                    self.file_handles[fh] = FileHandle(full_path_new, os.open(full_path_new, os.O_RDWR))
-        else:
-            raise FuseOSError(errno.ENOENT)
+        # Perform the recursive copy
+        recursive_copy(old, new)
+        # Remove the old path
+        def recursive_remove(path):
+            if self.getattr(path)['st_mode'] & 0o40000:  # Directory
+                for item in self.readdir(path,None):
+                    if item not in ['.', '..']:
+                        recursive_remove(os.path.join(path, item))
+                self.rmdir(path)
+            else:  # File
+                self.unlink(path)
+
+        recursive_remove(old)
         return 0
-
 
     def utimens(self, path, times=None):
         full_path = self.get_full_path(path)
