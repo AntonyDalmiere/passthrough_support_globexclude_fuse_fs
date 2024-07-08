@@ -224,14 +224,20 @@ class PassthroughFS(LoggingMixIn,Operations):
             return os.unlink(cache_path)
         raise FuseOSError(errno.ENOENT)
 
-    def symlink(self, name, target):
-        full_path_name = self.get_full_path(name)
-        full_path_target = self.get_full_path(target)
-        if self.is_excluded(name):
-            cache_path_name = self.get_cache_path(name)
-            return os.symlink(full_path_target, cache_path_name)
-        else:
-            return os.symlink(full_path_target, full_path_name)
+    def symlink(self, name ,target):
+            #raise not supported error on windows
+            if os.name == 'nt':
+                raise FuseOSError(errno.ENOTSUP)
+            source_path = self.get_full_path(target) if os.path.exists(self.get_full_path(target)) else self.get_cache_path(target) 
+
+            if self.is_excluded(name):
+                cache_path_name = self.get_cache_path(name)
+                os.symlink(source_path, cache_path_name)
+                
+            else:
+                full_path_name = self.get_full_path(name)
+                os.symlink(source_path, full_path_name)
+
 
     def rename(self, old, new):
         full_path_old = self.get_full_path(old)
