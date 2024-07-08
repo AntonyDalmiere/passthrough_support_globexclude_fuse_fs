@@ -346,7 +346,7 @@ class PassthroughFS(LoggingMixIn,Operations):
                     raise
             del self.file_handles[fh]
         else:
-            print(f"File handle {fh} not found in file_handles", flush=True)
+            pass
 
     def fsync(self, path, fdatasync, fh):
         return self.flush(path, fh)
