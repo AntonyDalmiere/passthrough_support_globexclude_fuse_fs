@@ -15,6 +15,7 @@ import psutil
 import logging
 from pathlib import Path
 import shutil
+import traceback
 
 class FileHandle:
     def __init__(self, path, real_fh):
@@ -57,7 +58,8 @@ class PassthroughFS(LoggingMixIn,Operations):
         st_dict = dict((key, getattr(st, key)) for key in (
             'st_atime', 'st_ctime', 'st_gid', 'st_mtime',
             'st_nlink', 'st_size', 'st_uid','st_mode'))
-        st_dict['st_mode'] = st_dict['st_mode'] | 0o777 # type: ignore
+        if os.name == 'nt':
+            st_dict['st_mode'] = st_dict['st_mode'] | 0o777
         return st_dict
 
     def readdir(self, path, fh):
@@ -131,10 +133,10 @@ class PassthroughFS(LoggingMixIn,Operations):
         full_path = self.get_full_path(path)
         cache_path = self.get_cache_path(path)
         if os.path.exists(full_path):
-            return os.chmod(full_path, mode)
-        elif os.path.exists(cache_path):
-            return os.chmod(cache_path, mode)
-        else:
+            os.chmod(full_path, mode)
+        if os.path.exists(cache_path):
+            os.chmod(cache_path, mode)
+        if not os.path.exists(full_path) and not os.path.exists(cache_path):
             raise FuseOSError(errno.ENOENT)
 
     def chown(self, path, uid, gid):
@@ -165,6 +167,8 @@ class PassthroughFS(LoggingMixIn,Operations):
         full_path = self.get_full_path(path)
         cache_path = self.get_cache_path(path)
         try:
+            if not os.path.exists(full_path) and not os.path.exists(cache_path):
+                raise FuseOSError(errno.ENOENT)
             if os.path.exists(full_path):
                 #remove readonly attrib 
                 os.chmod(full_path, stat.S_IWRITE)
@@ -172,8 +176,6 @@ class PassthroughFS(LoggingMixIn,Operations):
             if os.path.exists(cache_path):
                 os.chmod(cache_path, stat.S_IWRITE)
                 os.rmdir(cache_path)
-            elif not os.path.exists(full_path) and not os.path.exists(cache_path):
-                raise FuseOSError(errno.ENOENT)
         except OSError as e:
             raise FuseOSError(e.errno)
         return 0
@@ -240,64 +242,76 @@ class PassthroughFS(LoggingMixIn,Operations):
 
 
     def rename(self, old, new):
-        # Check if the source exists
-        if(self.access(old, os.R_OK) != 0):
-            raise FileNotFoundError(f"No such file or directory: '{old}'")
+        try:
+            # Check if the source exists
+            if(self.access(old, os.R_OK) != 0):
+                raise FileNotFoundError(f"No such file or directory: '{old}'")
 
         # # self.access must throw an exception, lese stop the function with an exception 
-        try:
-            if self.access(new, os.R_OK) == 0:
-                raise FuseOSError(errno.EEXIST)
-        except FuseOSError:
-            pass
+            try:
+                if self.access(new, os.R_OK) == 0:
+                    raise FuseOSError(errno.EEXIST)
+            except FuseOSError:
+                pass
 
-        def recursive_copy(old_path, new_path):
-            # If it's a directory, create the new directory and copy contents
-            if stat.S_ISDIR(self.getattr(old_path)['st_mode']):  # Directory
-                self.mkdir(new_path, self.getattr(old_path)['st_mode'])
-                for item in self.readdir(old_path,None):
-                    if item not in ['.', '..']:
-                        recursive_copy(os.path.join(old_path, item), os.path.join(new_path, item))
-            elif stat.S_ISLNK(self.getattr(old_path)['st_mode']):  # Symlink
-                # get right source of the symlinls
-                source_path = self.get_full_path(old_path) if os.path.exists(self.get_full_path(old_path)) else self.get_cache_path(old_path)
-                destination_path = self.get_full_path(new_path) if not self.is_excluded(new_path) else self.get_cache_path(new_path)
-                os.rename(source_path, destination_path)
-            
-            else:  # File
-                # Create the new file
-                new_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
-                
-                # Open the old file
-                old_fh = self.open(old_path, os.O_RDONLY)
-                
-                # Read from old and write to new
-                buffer_size = 4096
-                offset = 0
-                while True:
-                    data = self.read(old_path, buffer_size, offset, old_fh)
-                    if not data:
-                        break
-                    self.write(new_path, data, offset, new_fh)
-                    offset += len(data)
-                
-                # Close both files
-                self.release(old_path, old_fh)
-                self.release(new_path, new_fh)
+            #print current process open files
+            #close all file handles which are related to the file old
+            # corresponded_file_handles = [fh for fh in self.file_handles if self.file_handles[fh].path == self.get_full_path(old) or self.file_handles[fh].path == self.get_cache_path(old)]
+            # for fh in corresponded_file_handles:
+            #     print(f"Released file handle {fh} for {self.file_handles[fh].path}")
+            #     self.release(old, fh)
 
-        # Perform the recursive copy
-        recursive_copy(old, new)
-        # Remove the old path
-        def recursive_remove(path):
-            if self.getattr(path)['st_mode'] & 0o40000:  # Directory
-                for item in self.readdir(path,None):
-                    if item not in ['.', '..']:
-                        recursive_remove(os.path.join(path, item))
-                self.rmdir(path)
-            else:  # File
-                self.unlink(path)
+            def recursive_copy(old_path, new_path):
+                print(f"Copying {old_path} to {new_path}")
+                # If it's a directory, create the new directory and copy contents
+                if stat.S_ISDIR(self.getattr(old_path)['st_mode']):  # Directory
+                    self.mkdir(new_path, self.getattr(old_path)['st_mode'])
+                    for item in self.readdir(old_path,None):
+                        if item not in ['.', '..']:
+                            recursive_copy(os.path.join(old_path, item), os.path.join(new_path, item))
+                elif stat.S_ISLNK(self.getattr(old_path)['st_mode']):  # Symlink
+                    # get right source of the symlinls
+                    source_path = self.get_full_path(old_path) if os.path.exists(self.get_full_path(old_path)) else self.get_cache_path(old_path)
+                    destination_path = self.get_full_path(new_path) if not self.is_excluded(new_path) else self.get_cache_path(new_path)
+                    os.rename(source_path, destination_path)
+                
+                else:  # File
+                    # Create the new file
+                    new_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
+                    
+                    # Open the old file
+                    old_fh = self.open(old_path, os.O_RDONLY)
+                    
+                    # Read from old and write to new
+                    buffer_size = 4096
+                    offset = 0
+                    while True:
+                        data = self.read(old_path, buffer_size, offset, old_fh)
+                        if not data:
+                            break
+                        self.write(new_path, data, offset, new_fh)
+                        offset += len(data)
+                    
+                    # Close both files
+                    self.release(old_path, old_fh)
+                    self.release(new_path, new_fh)
 
-        recursive_remove(old)
+            # Perform the recursive copy
+            recursive_copy(old, new)
+            # Remove the old path
+            def recursive_remove(path):
+                if self.getattr(path)['st_mode'] & 0o40000:  # Directory
+                    for item in self.readdir(path,None):
+                        if item not in ['.', '..']:
+                            recursive_remove(os.path.join(path, item))
+                    self.rmdir(path)
+                else:  # File
+                    self.unlink(path)
+
+            recursive_remove(old)
+        except Exception:
+            #traceback
+            traceback.print_exc()
         return 0
 
     def utimens(self, path, times=None):
@@ -380,7 +394,7 @@ def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
     
     os.makedirs(name=cache_dir, exist_ok=True)
     print("Using cache directory:", cache_dir)
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint, foreground=True, allow_other=True, uid=-1, nothreads=True)
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint, foreground=True, allow_other=True, uid=-1, nothreads=True,debug=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PassthroughFS")
