@@ -168,13 +168,15 @@ class PassthroughFS(LoggingMixIn,Operations):
             if os.path.exists(full_path):
                 #remove readonly attrib 
                 os.chmod(full_path, stat.S_IWRITE)
-                return os.rmdir(full_path)
+                os.rmdir(full_path)
             if os.path.exists(cache_path):
                 os.chmod(cache_path, stat.S_IWRITE)
-                return os.rmdir(cache_path)
+                os.rmdir(cache_path)
+            elif not os.path.exists(full_path) and not os.path.exists(cache_path):
+                raise FuseOSError(errno.ENOENT)
         except OSError as e:
             raise FuseOSError(e.errno)
-        raise FuseOSError(errno.ENOENT)
+        return 0
 
     def mkdir(self, path, mode) -> None:
         full_path = self.get_full_path(path)
