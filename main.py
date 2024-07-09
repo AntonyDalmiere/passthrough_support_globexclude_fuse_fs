@@ -30,34 +30,60 @@ class PassthroughFS(LoggingMixIn,Operations):
         self.patterns = patterns
         self.cache_dir = cache_dir
         self.file_handles: Dict[int, FileHandle] = {} 
+
+    def get_right_path(self, path):
+        full_path = self.get_full_path(path)
+        cache_path = self.get_cache_path(path)
+        is_excluded = self.is_excluded(path)
+
+        full_exists = os.path.exists(full_path)
+        cache_exists = os.path.exists(cache_path)
+
+        if full_exists and cache_exists:
+            # Both exist, return the most recent one
+            full_mtime = os.path.getmtime(full_path)
+            cache_mtime = os.path.getmtime(cache_path)
+            return cache_path if cache_mtime > full_mtime else full_path
+        elif full_exists:
+            if is_excluded:
+                # Move to cache if it should be excluded
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                shutil.move(full_path, cache_path)
+                return cache_path
+            else:
+                return full_path
+        elif cache_exists:
+            if not is_excluded:
+                # Move to full if it should not be excluded
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                shutil.move(cache_path, full_path)
+                return full_path
+            else:
+                return cache_path
+        else:
+            # Neither exists, return the appropriate path based on exclusion
+            return cache_path if is_excluded else full_path
         
     # Filesystem methods
     def access(self, path, mode):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            if not os.access(full_path, mode):
-                raise FuseOSError(errno.EACCES)
-        elif os.path.exists(cache_path):
-            if not os.access(cache_path, mode):
-                raise FuseOSError(errno.EACCES)
-        else:
+        right_path = self.get_right_path(path)
+        if not os.path.exists(right_path):
             raise FuseOSError(errno.ENOENT)
+        if not os.access(right_path, mode):
+            raise FuseOSError(errno.EACCES)
         return 0
 
     def getattr(self, path, fh=None):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            st = os.lstat(full_path)
-        elif os.path.exists(cache_path):
-            st = os.lstat(cache_path)
-        else:
+        right_path = self.get_right_path(path)
+        if not os.path.exists(right_path):
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        st = os.lstat(right_path)
+       
         #Edit st to make user RWX perm
-        st_dict = dict((key, getattr(st, key)) for key in (
+        st_dict = dict((key, getattr(st, key,0)) for key in (
             'st_atime', 'st_ctime', 'st_gid', 'st_mtime',
-            'st_nlink', 'st_size', 'st_uid','st_mode'))
+            'st_nlink', 'st_size', 'st_uid','st_mode','st_birthtime'))
+        #add st_birthtime to st_dict
         if os.name == 'nt':
             st_dict['st_mode'] = st_dict['st_mode'] | 0o777
         return st_dict
@@ -73,17 +99,14 @@ class PassthroughFS(LoggingMixIn,Operations):
         return set(dirents)
 
     def open(self, path, flags):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            fh: FileHandle = FileHandle(full_path,os.open(full_path,flags))
-        elif os.path.exists(cache_path):
-            fh: FileHandle = FileHandle(cache_path,os.open(cache_path,flags))
+        right_path = self.get_right_path(path)
+        if os.path.exists(right_path):
+            fh: FileHandle = FileHandle(right_path, os.open(right_path, flags))
         else:
-                if flags & os.O_CREAT:
-                    return self.create(path, 0o777)
-                else:
-                    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+            if flags & os.O_CREAT:
+                return self.create(path, 0o777)
+            else:
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         #Append fh to file_handles
         exposed_fh = max(self.file_handles.keys()) + 1 if self.file_handles else 0
         self.file_handles[exposed_fh] = fh
@@ -93,10 +116,10 @@ class PassthroughFS(LoggingMixIn,Operations):
         if(self.access(path, os.R_OK) != 0):
             raise FuseOSError(errno.EACCES)
         
-        target_path = self.get_full_path(path) if os.path.exists(self.get_full_path(path)) else self.get_cache_path(path)
+        right_path = self.get_right_path(path)
 
-        if os.path.exists(target_path):
-            with open(target_path, 'rb') as f:  # Use 'with open' for both cases
+        if os.path.exists(right_path):
+            with open(right_path, 'rb') as f:
                 f.seek(offset)
                 data = b""
                 while len(data) < length:
@@ -112,17 +135,17 @@ class PassthroughFS(LoggingMixIn,Operations):
         if fh not in self.file_handles:
             raise KeyError(f"File handle {fh} not found")
 
-        target_path = self.get_full_path(path) if not self.is_excluded(path) else self.get_cache_path(path)
+        right_path = self.get_right_path(path)
 
-        if not os.path.exists(target_path):
-            raise FuseOSError(errno.ENOENT)  # Or raise an appropriate exception
+        if not os.path.exists(right_path):
+            raise FuseOSError(errno.ENOENT)
 
-        with open(target_path, 'r+b' if os.path.exists(target_path) else 'wb') as f:
+        with open(right_path, 'r+b' if os.path.exists(right_path) else 'wb') as f:
             f.seek(offset)
             total_written = 0
             while total_written < len(buf):
                 written = f.write(buf[total_written:])
-                if written == 0:  # Write error or end of file reached unexpectedly
+                if written == 0:
                     raise IOError("Failed to write entire buffer") 
                 total_written += written
 
@@ -130,32 +153,23 @@ class PassthroughFS(LoggingMixIn,Operations):
         return total_written
     
     def chmod(self, path, mode):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            os.chmod(full_path, mode)
-        if os.path.exists(cache_path):
-            os.chmod(cache_path, mode)
-        if not os.path.exists(full_path) and not os.path.exists(cache_path):
+        right_path = self.get_right_path(path)
+        if os.path.exists(right_path):
+            os.chmod(right_path, mode)
+        else:
             raise FuseOSError(errno.ENOENT)
 
     def chown(self, path, uid, gid):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            return os.chown(full_path, uid, gid)
-        elif os.path.exists(cache_path):
-            return os.chown(cache_path, uid, gid)
+        right_path = self.get_right_path(path)
+        if os.path.exists(right_path):
+            return os.chown(right_path, uid, gid)
         else:
             raise FuseOSError(errno.ENOENT)
 
     def readlink(self, path):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            pathname = os.readlink(full_path)
-        elif os.path.exists(cache_path):
-            pathname = os.readlink(cache_path)
+        right_path = self.get_right_path(path)
+        if os.path.exists(right_path):
+            pathname = os.readlink(right_path)
         else:
             raise FuseOSError(errno.ENOENT)
         if pathname.startswith("/"):
@@ -181,20 +195,13 @@ class PassthroughFS(LoggingMixIn,Operations):
         return 0
 
     def mkdir(self, path, mode) -> None:
-        full_path = self.get_full_path(path)
-        if self.is_excluded(path):
-            cache_path = self.get_cache_path(path)
-            return os.mkdir(cache_path, mode)
-        else:
-            return os.mkdir(full_path, mode)
+        right_path = self.get_right_path(path)
+        return os.mkdir(right_path, mode)
 
     def statfs(self, path):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            stv = psutil.disk_usage(full_path)
-        elif os.path.exists(cache_path):
-            stv = psutil.disk_usage(cache_path)
+        right_path = self.get_right_path(path)
+        if os.path.exists(right_path):
+            stv = psutil.disk_usage(right_path)
         else:
             raise FuseOSError(errno.ENOENT)
         block_size = 4096  # Set the block size to a fixed value
@@ -213,76 +220,48 @@ class PassthroughFS(LoggingMixIn,Operations):
         }
 
     def unlink(self, path):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        corresponded_file_handles = [fh for fh in self.file_handles if self.file_handles[fh].path == full_path or self.file_handles[fh].path == cache_path]
+        right_path = self.get_right_path(path)
+        corresponded_file_handles = [fh for fh in self.file_handles if self.file_handles[fh].path == right_path]
 
         for fh in corresponded_file_handles:
             self.release(path, fh)
 
-        if os.path.exists(full_path):
-            return os.unlink(full_path)
-        if os.path.exists(cache_path):
-            return os.unlink(cache_path)
+        if os.path.exists(right_path):
+            return os.unlink(right_path)
         raise FuseOSError(errno.ENOENT)
 
-    def symlink(self, name ,target):
-            #raise not supported error on windows
-            if os.name == 'nt':
-                raise FuseOSError(errno.ENOTSUP)
-            source_path = self.get_full_path(target) if os.path.exists(self.get_full_path(target)) else self.get_cache_path(target) 
-
-            if self.is_excluded(name):
-                cache_path_name = self.get_cache_path(name)
-                os.symlink(source_path, cache_path_name)
-                
-            else:
-                full_path_name = self.get_full_path(name)
-                os.symlink(source_path, full_path_name)
-
+    def symlink(self, name, target):
+        if os.name == 'nt':
+            raise FuseOSError(errno.ENOTSUP)
+        target_path = self.get_right_path(target)
+        name_path = self.get_right_path(name)
+        os.symlink(target_path, name_path)
 
     def rename(self, old, new):
         try:
-            # Check if the source exists
             if(self.access(old, os.R_OK) != 0):
-                raise FileNotFoundError(f"No such file or directory: '{old}'")
+                raise FuseOSError(errno.ENOENT)
 
-        # # self.access must throw an exception, lese stop the function with an exception 
             try:
                 if self.access(new, os.R_OK) == 0:
                     raise FuseOSError(errno.EEXIST)
             except FuseOSError:
                 pass
 
-            #print current process open files
-            #close all file handles which are related to the file old
-            # corresponded_file_handles = [fh for fh in self.file_handles if self.file_handles[fh].path == self.get_full_path(old) or self.file_handles[fh].path == self.get_cache_path(old)]
-            # for fh in corresponded_file_handles:
-            #     print(f"Released file handle {fh} for {self.file_handles[fh].path}")
-            #     self.release(old, fh)
-
             def recursive_copy(old_path, new_path):
                 print(f"Copying {old_path} to {new_path}")
-                # If it's a directory, create the new directory and copy contents
                 if stat.S_ISDIR(self.getattr(old_path)['st_mode']):  # Directory
                     self.mkdir(new_path, self.getattr(old_path)['st_mode'])
                     for item in self.readdir(old_path,None):
                         if item not in ['.', '..']:
                             recursive_copy(os.path.join(old_path, item), os.path.join(new_path, item))
                 elif stat.S_ISLNK(self.getattr(old_path)['st_mode']):  # Symlink
-                    # get right source of the symlinls
-                    source_path = self.get_full_path(old_path) if os.path.exists(self.get_full_path(old_path)) else self.get_cache_path(old_path)
-                    destination_path = self.get_full_path(new_path) if not self.is_excluded(new_path) else self.get_cache_path(new_path)
+                    source_path = self.get_right_path(old_path)
+                    destination_path = self.get_right_path(new_path)
                     os.rename(source_path, destination_path)
-                
                 else:  # File
-                    # Create the new file
                     new_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
-                    
-                    # Open the old file
                     old_fh = self.open(old_path, os.O_RDONLY)
-                    
-                    # Read from old and write to new
                     buffer_size = 4096
                     offset = 0
                     while True:
@@ -291,14 +270,11 @@ class PassthroughFS(LoggingMixIn,Operations):
                             break
                         self.write(new_path, data, offset, new_fh)
                         offset += len(data)
-                    
-                    # Close both files
                     self.release(old_path, old_fh)
                     self.release(new_path, new_fh)
 
-            # Perform the recursive copy
             recursive_copy(old, new)
-            # Remove the old path
+
             def recursive_remove(path):
                 if self.getattr(path)['st_mode'] & 0o40000:  # Directory
                     for item in self.readdir(path,None):
@@ -310,43 +286,28 @@ class PassthroughFS(LoggingMixIn,Operations):
 
             recursive_remove(old)
         except Exception:
-            #traceback
             traceback.print_exc()
         return 0
 
     def utimens(self, path, times=None):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            return os.utime(full_path, times)
-        elif os.path.exists(cache_path):
-            return os.utime(cache_path, times)
+        right_path = self.get_right_path(path)
+        if os.path.exists(right_path):
+            return os.utime(right_path, times)
         else:
             raise FuseOSError(errno.ENOENT)
 
     def create(self, path, mode):
-        if self.is_excluded(path):
-            cache_path = self.get_cache_path(path)
-            os.makedirs(os.path.dirname(cache_path), exist_ok=True)     
-            fd = os.open(cache_path, os.O_RDWR | os.O_CREAT, mode)
-            new_fd_id = max(self.file_handles.keys()) + 1 if self.file_handles else 0
-            self.file_handles[new_fd_id] = FileHandle(cache_path,fd)
-        else:
-            full_path = self.get_full_path(path)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            fd = os.open(full_path, os.O_RDWR | os.O_CREAT, mode)
-            new_fd_id = max(self.file_handles.keys()) + 1 if self.file_handles else 0
-            self.file_handles[new_fd_id] = FileHandle(full_path,fd)
+        right_path = self.get_right_path(path)
+        os.makedirs(os.path.dirname(right_path), exist_ok=True)
+        fd = os.open(right_path, os.O_RDWR | os.O_CREAT, mode)
+        new_fd_id = max(self.file_handles.keys()) + 1 if self.file_handles else 0
+        self.file_handles[new_fd_id] = FileHandle(right_path, fd)
         return new_fd_id
     
     def truncate(self, path, length, fh=None):
-        full_path = self.get_full_path(path)
-        cache_path = self.get_cache_path(path)
-        if os.path.exists(full_path):
-            with open(full_path, "r+") as f:
-                f.truncate(length)
-        elif os.path.exists(cache_path):
-            with open(cache_path, "r+") as f:
+        right_path = self.get_right_path(path)
+        if os.path.exists(right_path):
+            with open(right_path, "r+") as f:
                 f.truncate(length)
         else:
             raise FuseOSError(errno.ENOENT)
@@ -366,7 +327,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         return self.flush(path, fh)
 
     def flush(self, path, fh):
-        # return os.fsync(fh)
         pass
 
     def get_full_path(self, path):
@@ -381,9 +341,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         if not self.patterns:
             return False
         return glob_match(path, self.patterns)
-
-    
-
 
 def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
     if patterns:
