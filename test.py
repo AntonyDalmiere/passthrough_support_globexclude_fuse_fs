@@ -1091,6 +1091,166 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.assertGreater(free, 0)
         self.assertLessEqual(used, total)
 
+    def test_end_to_end_document_editing_workflow(self):
+        # Simulate a user creating, editing, and organizing documents
+        
+        # 1. Create a new document
+        doc_path = os.path.join(self.mounted_dir, 'my_document.txt')
+        with open(doc_path, 'w') as f:
+            f.write('Initial content')
+        
+        # 2. Read the document
+        with open(doc_path, 'r') as f:
+            content = f.read()
+        self.assertEqual(content, 'Initial content')
+        
+        # 3. Edit the document
+        with open(doc_path, 'a') as f:
+            f.write('\nAdditional content')
+        
+        # 4. Create a new directory for organizing
+        os.mkdir(os.path.join(self.mounted_dir, 'Documents'))
+        
+        # 5. Move the document to the new directory
+        new_doc_path = os.path.join(self.mounted_dir, 'Documents', 'my_document.txt')
+        os.rename(doc_path, new_doc_path)
+        
+        # 6. Verify the move
+        self.assertFalse(os.path.exists(doc_path))
+        self.assertTrue(os.path.exists(new_doc_path))
+        
+        # 7. Read the moved document
+        with open(new_doc_path, 'r') as f:
+            content = f.read()
+        self.assertEqual(content, 'Initial content\nAdditional content')
+        
+        # 8. Create a backup of the document
+        backup_path = os.path.join(self.mounted_dir, 'Documents', 'my_document_backup.txt')
+        shutil.copy2(new_doc_path, backup_path)
+        
+        # 9. Verify both files exist and have the same content
+        self.assertTrue(os.path.exists(new_doc_path))
+        self.assertTrue(os.path.exists(backup_path))
+        with open(backup_path, 'r') as f:
+            backup_content = f.read()
+        self.assertEqual(content, backup_content)
+        
+        # 10. Delete the original document
+        os.remove(new_doc_path)
+        self.assertFalse(os.path.exists(new_doc_path))
+        self.assertTrue(os.path.exists(backup_path))
+
+    def test_end_to_end_software_development_workflow(self):
+        # Simulate a software development workflow
+        
+        # 1. Create a project directory
+        project_dir = os.path.join(self.mounted_dir, 'my_project')
+        os.mkdir(project_dir)
+        
+        # 2. Create a source file
+        src_file = os.path.join(project_dir, 'main.py')
+        with open(src_file, 'w') as f:
+            f.write('print("Hello, World!")')
+        
+        # 3. Create a git ignore file (excluded)
+        gitignore_file = os.path.join(project_dir, '.gitignore')
+        with open(gitignore_file, 'w') as f:
+            f.write('*.pyc\n__pycache__')
+        
+        # 4. Compile the source file (creating a .pyc file, which should be excluded)
+        import py_compile
+        py_compile.compile(src_file)
+        
+        # 5. Verify .pyc file is not visible in the mounted directory
+        pyc_file = src_file + 'c'  # Python 3.2+ uses .pyc in __pycache__
+        self.assertFalse(os.path.exists(pyc_file))
+        
+        # 6. Create a subdirectory for tests
+        test_dir = os.path.join(project_dir, 'tests')
+        os.mkdir(test_dir)
+        
+        # 7. Create a test file
+        test_file = os.path.join(test_dir, 'test_main.py')
+        with open(test_file, 'w') as f:
+            f.write('assert True')
+        
+        # 8. List the project directory
+        project_contents = os.listdir(project_dir)
+        self.assertIn('main.py', project_contents)
+        self.assertIn('.gitignore', project_contents)
+        self.assertIn('tests', project_contents)
+        self.assertNotIn('main.pyc', project_contents)
+        
+        # 9. Rename the test directory
+        new_test_dir = os.path.join(project_dir, 'unit_tests')
+        os.rename(test_dir, new_test_dir)
+        
+        # 10. Verify the rename
+        self.assertFalse(os.path.exists(test_dir))
+        self.assertTrue(os.path.exists(new_test_dir))
+        self.assertTrue(os.path.exists(os.path.join(new_test_dir, 'test_main.py')))
+
+    def test_end_to_end_file_syncing_scenario(self):
+        # Simulate a file syncing scenario with excluded and non-excluded files
+        
+        # 1. Create a sync directory
+        sync_dir = os.path.join(self.mounted_dir, 'sync_folder')
+        os.mkdir(sync_dir)
+        
+        # 2. Create some files in the sync directory
+        with open(os.path.join(sync_dir, 'document.txt'), 'w') as f:
+            f.write('Important document')
+        with open(os.path.join(sync_dir, 'script.py'), 'w') as f:
+            f.write('print("Hello")')
+        with open(os.path.join(sync_dir, 'large_file.bin'), 'wb') as f:
+            f.write(os.urandom(1024 * 1024))  # 1 MB random data
+        
+        # 3. Create some excluded files
+        with open(os.path.join(sync_dir, '.DS_Store'), 'w') as f:
+            f.write('Fake DS_Store file')
+        with open(os.path.join(sync_dir, 'temp.txt'), 'w') as f:
+            f.write('Temporary file')
+        
+        # 4. List the directory and check for correct visibility
+        sync_contents = os.listdir(sync_dir)
+        self.assertIn('document.txt', sync_contents)
+        self.assertIn('script.py', sync_contents)
+        self.assertIn('large_file.bin', sync_contents)
+        self.assertIn('.DS_Store', sync_contents)
+        self.assertIn('temp.txt', sync_contents)
+        
+        # 5. Simulate sync by copying to a new location
+        sync_target = os.path.join(self.mounted_dir, 'synced_folder')
+        shutil.copytree(sync_dir, sync_target)
+        
+        # 6. Verify synced contents
+        synced_contents = os.listdir(sync_target)
+        self.assertIn('document.txt', synced_contents)
+        self.assertIn('script.py', synced_contents)
+        self.assertIn('large_file.bin', synced_contents)
+        self.assertIn('.DS_Store', synced_contents)
+        self.assertIn('temp.txt', synced_contents)
+        self.assertNotIn('tempqsdd', synced_contents)
+
+        # 7. Modify an excluded file
+        with open(os.path.join(sync_target, '.DS_Store'), 'a') as f:
+            f.write('\nModified content')
+        
+        # 8. Simulate incremental sync
+        shutil.copytree(sync_dir, sync_target, dirs_exist_ok=True)
+        
+        # 9. Verify the excluded file was not synced
+        with open(os.path.join(sync_target, '.DS_Store'), 'r') as f:
+            content = f.read()
+        self.assertNotIn('Modified content', content)
+        
+        # 10. Clean up by removing the sync directories
+        shutil.rmtree(sync_dir)
+        shutil.rmtree(sync_target)
+        self.assertFalse(os.path.exists(sync_dir))
+        self.assertFalse(os.path.exists(sync_target))
+
+
 # Don't forget to import necessary modules at the beginning of your file:
 # import random, concurrent.futures, fcntl, resource
     def tearDown(self):
