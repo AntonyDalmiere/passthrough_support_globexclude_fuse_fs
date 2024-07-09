@@ -1,12 +1,17 @@
 import os
 import shutil
+import stat
+import subprocess
 import tempfile
 import threading
 import unittest
+
+import psutil
 from main import start_passthrough_fs
 import multiprocessing
 import time
-
+import random
+import concurrent.futures
 def determine_mountdir_based_on_os():
     if os.name == 'nt':
         return 'T:'
@@ -527,6 +532,567 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
         self.assertFalse(os.path.exists(root_dir))
     
+    def test_create_and_read_large_file(self):
+        large_file_path = os.path.join(self.mounted_dir, 'large_file.bin')
+        size = 100 * 1024 * 1024  # 100 MB
+        with open(large_file_path, 'wb') as f:
+            f.write(os.urandom(size))
+        
+        with open(large_file_path, 'rb') as f:
+            content = f.read()
+        
+        self.assertEqual(len(content), size)
+
+    def test_concurrent_file_operations(self):
+        def worker(file_name, content):
+            file_path = os.path.join(self.mounted_dir, file_name)
+            with open(file_path, 'w') as f:
+                f.write(content)
+            time.sleep(0.1)
+            with open(file_path, 'r') as f:
+                return f.read()
+
+        threads = []
+        results = {}
+        for i in range(10):
+            t = threading.Thread(target=lambda: results.update({f'file_{i}.txt': worker(f'file_{i}.txt', f'content_{i}')}))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        for i in range(10):
+            self.assertEqual(results[f'file_{i}.txt'], f'content_{i}')
+
+    def test_file_permissions(self):
+        file_path = os.path.join(self.mounted_dir, 'permissions_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+
+        if os.name != 'nt': # POSIX
+            os.chmod(file_path, 0o644)
+            stat_result = os.stat(file_path)
+            self.assertEqual(stat.S_IMODE(stat_result.st_mode), 0o644)
+
+            os.chmod(file_path, 0o444)
+            stat_result = os.stat(file_path)
+            self.assertEqual(stat.S_IMODE(stat_result.st_mode), 0o444)
+            with self.assertRaises(PermissionError):
+                with open(file_path, 'w') as f:
+                    f.write('should fail')
+        else: # WINDOWS
+            os.chmod(file_path, stat.S_IREAD | stat.S_IWRITE)
+            self.assertTrue(os.access(file_path, os.R_OK | os.W_OK))
+
+            os.chmod(file_path, stat.S_IREAD)
+            self.assertTrue(os.access(file_path, os.R_OK))
+            self.assertTrue(os.access(file_path, os.W_OK))
+       
+
+    def test_file_timestamps(self):
+        file_path = os.path.join(self.mounted_dir, 'timestamp_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        
+        current_time = time.time()
+        os.utime(file_path, (current_time, current_time))
+        
+        stat_result = os.stat(file_path)
+        self.assertAlmostEqual(stat_result.st_atime, current_time, delta=1)
+        self.assertAlmostEqual(stat_result.st_mtime, current_time, delta=1)
+
+    def test_symlink_to_excluded_file(self):
+        if os.name == 'nt':
+            self.skipTest('Symlinks are not fully supported on Windows')
+        
+        excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
+        with open(excluded_file, 'w') as f:
+            f.write('excluded content')
+        
+        symlink_path = os.path.join(self.mounted_dir, 'symlink_to_excluded')
+        os.symlink(excluded_file, symlink_path)
+        
+        self.assertTrue(os.path.islink(symlink_path))
+        with open(symlink_path, 'r') as f:
+            content = f.read()
+        self.assertEqual(content, 'excluded content')
+
+    def test_rename_open_file(self):
+        if(os.name == 'nt'):
+            self.skipTest('Rename open file is not supported on Windows')
+        file_path = os.path.join(self.mounted_dir, 'open_file.txt')
+        new_path = os.path.join(self.mounted_dir, 'renamed_open_file.txt')
+        
+        with open(file_path, 'w') as f:
+            f.write('initial content')
+            os.rename(file_path, new_path)
+            f.write(' additional content')
+        
+        with open(new_path, 'r') as f:
+            content = f.read()
+        
+        self.assertEqual(content, 'initial content additional content')
+        self.assertFalse(os.path.exists(file_path))
+        self.assertTrue(os.path.exists(new_path))
+
+    def test_create_file_in_nonexistent_directory(self):
+        nested_file_path = os.path.join(self.mounted_dir, 'nonexistent', 'nested', 'file.txt')
+        
+        with self.assertRaises(FileNotFoundError):
+            with open(nested_file_path, 'w') as f:
+                f.write('test content')
+
+    def test_move_directory_between_excluded_and_non_excluded(self):
+        non_excluded_dir = os.path.join(self.mounted_dir, 'non_excluded_dir')
+        excluded_dir = os.path.join(self.mounted_dir, 'excluded_dir.txt')
+        
+        os.makedirs(non_excluded_dir)
+        with open(os.path.join(non_excluded_dir, 'file1.txt'), 'w') as f:
+            f.write('content1')
+        with open(os.path.join(non_excluded_dir, 'file2'), 'w') as f:
+            f.write('content2')
+        
+        shutil.move(non_excluded_dir, excluded_dir)
+        
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'file1.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'file2')))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'non_excluded_dir')))
+
+        shutil.move(excluded_dir, non_excluded_dir)
+        
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'non_excluded_dir', 'file1.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'non_excluded_dir', 'file2')))
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt')))
+
+    def test_delete_file(self):
+        file_path = os.path.join(self.mounted_dir, 'testfile.txt')
+        with open(file_path, 'w') as f:
+            f.write('test data')
+        os.remove(file_path)
+        self.assertFalse(os.path.exists(file_path))
+
+    def test_delete_directory(self):
+        dir_path = os.path.join(self.mounted_dir, 'testdir')
+        os.makedirs(dir_path)
+        self.assertTrue(os.path.exists(dir_path))
+        shutil.rmtree(dir_path)
+        self.assertFalse(os.path.exists(dir_path))
+
+    def test_copy_file(self):
+        source_path = os.path.join(self.mounted_dir, 'source.txt')
+        target_path = os.path.join(self.mounted_dir, 'target.txt')
+        with open(source_path, 'w') as f:
+            f.write('test data')
+        shutil.copy(source_path, target_path)
+        self.assertTrue(os.path.exists(target_path))
+        with open(target_path, 'r') as f:
+            data = f.read()
+        self.assertEqual(data, 'test data')
+
+    def test_copy_directory(self):
+        source_dir = os.path.join(self.mounted_dir, 'source_dir')
+        target_dir = os.path.join(self.mounted_dir, 'target_dir')
+        os.makedirs(source_dir)
+        with open(os.path.join(source_dir, 'file.txt'), 'w') as f:
+            f.write('test data')
+        shutil.copytree(source_dir, target_dir)
+        self.assertTrue(os.path.exists(target_dir))
+        self.assertTrue(os.path.exists(os.path.join(target_dir, 'file.txt')))
+        with open(os.path.join(target_dir, 'file.txt'), 'r') as f:
+            data = f.read()
+        self.assertEqual(data, 'test data')
+
+    def test_file_exists(self):
+        file_path = os.path.join(self.mounted_dir, 'testfile.txt')
+        self.assertFalse(os.path.exists(file_path))
+        with open(file_path, 'w') as f:
+            f.write('test data')
+        self.assertTrue(os.path.exists(file_path))
+
+    def test_directory_exists(self):
+        dir_path = os.path.join(self.mounted_dir, 'testdir')
+        self.assertFalse(os.path.exists(dir_path))
+        os.makedirs(dir_path)
+        self.assertTrue(os.path.exists(dir_path))
+
+    def test_file_extension(self):
+        file_path = os.path.join(self.mounted_dir, 'testfile.txt')
+        self.assertEqual(os.path.splitext(file_path)[1], '.txt')
+
+    def test_file_size(self):
+        file_path = os.path.join(self.mounted_dir, 'testfile.txt')
+        with open(file_path, 'w') as f:
+            f.write('test data')
+        self.assertEqual(os.path.getsize(file_path), 9)
+
+    def test_directory_listing(self):
+        dir_path = os.path.join(self.mounted_dir, 'testdir')
+        os.makedirs(dir_path)
+        with open(os.path.join(dir_path, 'file1.txt'), 'w') as f:
+            f.write('test data 1')
+        with open(os.path.join(dir_path, 'file2.txt'), 'w') as f:
+            f.write('test data 2')
+        listing = os.listdir(dir_path)
+        self.assertEqual(len(listing), 2)
+        self.assertIn('file1.txt', listing)
+        self.assertIn('file2.txt', listing)
+
+    def test_file_descriptor_leaks(self):
+        if os.name == 'nt':
+            self.skipTest('File descriptor count are not avaible on Windows')
+        file_path = os.path.join(self.mounted_dir, 'fd_test.txt')
+        initial_fds = psutil.Process().num_fds()
+        
+        for _ in range(100):
+            with open(file_path, 'w') as f:
+                f.write('test content')
+            with open(file_path, 'r') as f:
+                f.read()
+        
+        final_fds = psutil.Process().num_fds()
+        self.assertLess(final_fds - initial_fds, 10)  # Allow for some fluctuation, but ensure no major leaks
+
+    def test_concurrent_rename_operations(self):
+        def rename_worker(old_name, new_name):
+            old_path = os.path.join(self.mounted_dir, old_name)
+            new_path = os.path.join(self.mounted_dir, new_name)
+            with open(old_path, 'w') as f:
+                f.write(f'content of {old_name}')
+            time.sleep(0.1)
+            os.rename(old_path, new_path)
+
+        threads = []
+        for i in range(10):
+            t = threading.Thread(target=rename_worker, args=(f'old_file_{i}.txt', f'new_file_{i}.txt'))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        for i in range(10):
+            self.assertFalse(os.path.exists(os.path.join(self.mounted_dir, f'old_file_{i}.txt')))
+            self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, f'new_file_{i}.txt')))
+
+    def test_read_write_at_file_boundaries(self):
+        file_path = os.path.join(self.mounted_dir, 'boundary_test.txt')
+        data: bytes = b'a' * 4096 + b'b' * 4096  # Two pages of data
+        
+        with open(file_path, 'wb') as f:
+            f.write(data)
+        
+        with open(file_path, 'rb') as f:
+            f.seek(4095)
+            self.assertEqual(f.read(2), b'ab')
+            
+            f.seek(8191)
+            self.assertEqual(len(f.read(2)), second=1)
+
+            f.seek(10000)
+            self.assertEqual(f.read(200), b'')
+
+    def test_execute_permission_on_files(self):
+        if os.name == 'nt':
+            self.skipTest('Execute permissions are not applicable on Windows')
+        
+        file_path = os.path.join(self.mounted_dir, 'executable.sh')
+        with open(file_path, 'w') as f:
+            f.write('#!/bin/sh\necho "Hello, World!"')
+        
+        os.chmod(file_path, 0o755)
+        stat_result = os.stat(file_path)
+        self.assertTrue(stat_result.st_mode & stat.S_IXUSR)
+
+        result = subprocess.run([file_path], capture_output=True, text=True)
+        self.assertEqual(result.stdout.strip(), "Hello, World!")
+
+    def test_file_content_integrity_after_multiple_writes(self):
+        file_path = os.path.join(self.mounted_dir, 'integrity_test.txt')
+        
+        content = 'Initial content\n'
+
+        with open(file_path, 'w') as f:
+            f.write(content)
+
+        for i in range(100):
+            with open(file_path, 'a') as f:
+                f.write(f'Append {i}\n')
+
+        with open(file_path, 'r') as f:
+            file_content = f.read()
+
+        expected_content = content + ''.join([f'Append {i}\n' for i in range(100)])
+        self.assertEqual(file_content, expected_content)
+
+    def test_file_content_integrity_after_random_seeks_and_writes(self):
+        file_path = os.path.join(self.mounted_dir, 'random_seek_test')
+        content = 'x' * 10000
+        with open(file_path, 'w') as f:
+            f.write(content)
+        
+        nbr_y_written = 0
+        for _ in range(1000):
+            with open(file_path, 'r+') as f:
+                pos = random.randint(0, 9999)
+                f.seek(pos)
+                if f.read(1) != 'y':  # read the character at the position
+                    f.seek(pos)  # move the pointer back after reading
+                    f.write('y')
+                    nbr_y_written += 1
+                
+        
+        with open(file_path, 'r') as f:
+            modified_content = f.read()
+        
+        self.assertEqual(len(modified_content), 10000)
+        self.assertEqual(modified_content.count('y'), nbr_y_written)
+
+    def test_concurrent_reads_same_file(self):
+        file_path = os.path.join(self.mounted_dir, 'concurrent_read.txt')
+        content = 'x' * 1000000
+        with open(file_path, 'w') as f:
+            f.write(content)
+        
+        def read_file():
+            with open(file_path, 'r') as f:
+                return f.read()
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(lambda _: read_file(), range(10)))
+        
+        for result in results:
+            self.assertEqual(result, content)
+
+    def test_concurrent_writes_different_files(self):
+        def write_file(file_name):
+            file_path = os.path.join(self.mounted_dir, file_name)
+            with open(file_path, 'w') as f:
+                f.write(f'Content of {file_name}')
+        
+        file_names = [f'concurrent_write_{i}.txt' for i in range(100)]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            executor.map(write_file, file_names)
+        
+        for file_name in file_names:
+            file_path = os.path.join(self.mounted_dir, file_name)
+            with open(file_path, 'r') as f:
+                self.assertEqual(f.read(), f'Content of {file_name}')
+
+    def test_large_directory_listing(self):
+        dir_path = os.path.join(self.mounted_dir, 'large_dir')
+        os.makedirs(dir_path)
+        for i in range(10000):
+            with open(os.path.join(dir_path, f'file_{i}.txt'), 'w') as f:
+                f.write(f'Content of file {i}')
+        
+        start_time = time.time()
+        files = os.listdir(dir_path)
+        end_time = time.time()
+        
+        self.assertEqual(len(files), 10000)
+        self.assertLess(end_time - start_time, 5)  # Ensure listing is reasonably fast
+
+    def test_file_creation_time(self):
+        file_path = os.path.join(self.mounted_dir, 'creation_time_test')
+        before = time.time()
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        after = time.time()
+        print("STTI" + str(os.stat(file_path)))
+        creation_time = os.path.getctime(file_path)
+        print("CT " + str(creation_time))
+        self.assertGreaterEqual(creation_time, before)
+        self.assertLessEqual(creation_time, after)
+
+    def test_extended_attributes(self):
+        if not hasattr(os, 'setxattr'):
+            self.skipTest('Extended attributes are not supported on this platform')
+        
+        file_path = os.path.join(self.mounted_dir, 'xattr_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        
+        os.setxattr(file_path, b'user.test_attr', b'test_value')
+        value = os.getxattr(file_path, b'user.test_attr')
+        self.assertEqual(value, b'test_value')
+
+    def test_sparse_file_support(self):
+        file_path = os.path.join(self.mounted_dir, 'sparse_test.txt')
+        with open(file_path, 'wb') as f:
+            f.seek(1000000)
+            f.write(b'end')
+        
+        self.assertEqual(os.path.getsize(file_path), 1000003)
+        with open(file_path, 'rb') as f:
+            f.seek(0)
+            start = f.read(10)
+            f.seek(999990)
+            end = f.read(13)
+        
+        self.assertEqual(start, b'\0' * 10)
+        self.assertEqual(end, b'\0' * 10 + b'end')
+
+    def test_file_truncate(self):
+        file_path = os.path.join(self.mounted_dir, 'truncate_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('0123456789')
+        
+        with open(file_path, 'r+') as f:
+            f.truncate(5)
+        
+        with open(file_path, 'r') as f:
+            content = f.read()
+        self.assertEqual(content, '01234')
+
+    def test_rename_to_existing_file(self):
+        file1 = os.path.join(self.mounted_dir, 'file1.txt')
+        file2 = os.path.join(self.mounted_dir, 'file2')
+        
+        with open(file1, 'w') as f:
+            f.write('content1')
+        with open(file2, 'w') as f:
+            f.write('content2')
+
+        with self.assertRaises(FileExistsError):        
+            os.rename(file1, file2)
+        
+        self.assertTrue(os.path.exists(file1))
+        with open(file2, 'r') as f:
+            self.assertEqual(f.read(), 'content2')
+
+    def test_rename_open_file_windows(self):
+        if os.name != 'nt':
+            self.skipTest('This test is specific to Windows')
+        
+        file_path = os.path.join(self.mounted_dir, 'rename_open_win.txt')
+        new_path = os.path.join(self.mounted_dir, 'renamed_open_win.txt')
+        
+        with open(file_path, 'w') as f:
+            f.write('initial content')
+            with self.assertRaises(PermissionError):
+                os.rename(file_path, new_path)
+
+    def test_case_sensitivity(self):
+        lower_path = os.path.join(self.mounted_dir, 'case_test.txt')
+        upper_path = os.path.join(self.mounted_dir, 'CASE_TEST.TXT')
+        
+        with open(lower_path, 'w') as f:
+            f.write('lower case')
+        
+        if os.name == 'nt':
+            # Windows is case-insensitive by default
+            with open(upper_path, 'r') as f:
+                self.assertEqual(f.read(), 'lower case')
+        else:
+            # Unix-like systems are case-sensitive
+            with open(upper_path, 'w') as f:
+                f.write('UPPER CASE')
+            with open(lower_path, 'r') as f:
+                self.assertEqual(f.read(), 'lower case')
+            with open(upper_path, 'r') as f:
+                self.assertEqual(f.read(), 'UPPER CASE')
+
+    def test_middle_file_names(self):
+        long_name = 'a' * 200  # Maximum allowed in many filesystems
+        file_path = os.path.join(self.mounted_dir, long_name)
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        self.assertTrue(os.path.exists(file_path))
+
+    def test_dot_files(self):
+        dot_file = os.path.join(self.mounted_dir, '.hidden_file')
+        with open(dot_file, 'w') as f:
+            f.write('hidden content')
+        self.assertTrue(os.path.exists(dot_file))
+        self.assertIn('.hidden_file', os.listdir(self.mounted_dir))
+
+    def test_file_name_with_special_characters(self):
+        special_chars = 'file with !@#$%^&()_+-=[]{};\',. 你好.txt'
+        file_path = os.path.join(self.mounted_dir, special_chars)
+        with open(file_path, 'w') as f:
+            f.write('special content')
+        self.assertTrue(os.path.exists(file_path))
+        self.assertIn(special_chars, os.listdir(self.mounted_dir))
+
+    def test_large_file_read_write(self):
+        file_path = os.path.join(self.mounted_dir, 'large_file_test.bin')
+        size = 1 * 1024 * 1024 * 1024  # 1 GB
+        chunk_size = 1024 * 1024  # 1 MB
+        
+        # Write
+        with open(file_path, 'wb') as f:
+            for _ in range(size // chunk_size):
+                f.write(os.urandom(chunk_size))
+        
+        # Read and verify
+        with open(file_path, 'rb') as f:
+            read_size = 0
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                read_size += len(chunk)
+        
+        self.assertEqual(read_size, size)
+
+    def test_directory_mtime_update(self):
+        dir_path = os.path.join(self.mounted_dir, 'mtime_test_dir')
+        os.mkdir(dir_path)
+        dir_mtime = os.stat(dir_path).st_mtime
+        
+        time.sleep(1)  # Ensure enough time has passed for mtime to change
+        file_path = os.path.join(dir_path, 'new_file')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        
+        new_dir_mtime = os.stat(dir_path).st_mtime
+        self.assertGreater(new_dir_mtime, dir_mtime)
+
+    def test_symlink_to_directory(self):
+        if os.name == 'nt':
+            self.skipTest('Symlinks to directories are not fully supported on Windows')
+        
+        dir_path = os.path.join(self.mounted_dir, 'symlink_target_dir')
+        os.mkdir(dir_path)
+        symlink_path = os.path.join(self.mounted_dir, 'dir_symlink')
+        os.symlink(dir_path, symlink_path)
+        
+        self.assertTrue(os.path.islink(symlink_path))
+        self.assertTrue(os.path.isdir(symlink_path))
+
+    def test_recursive_directory_removal(self):
+        root_dir = os.path.join(self.mounted_dir, 'recursive_test')
+        os.makedirs(os.path.join(root_dir, 'subdir1', 'subdir2'))
+        with open(os.path.join(root_dir, 'file1.txt'), 'w') as f:
+            f.write('content1')
+        with open(os.path.join(root_dir, 'subdir1', 'file2.txt'), 'w') as f:
+            f.write('content2')
+        
+        shutil.rmtree(root_dir)
+        self.assertFalse(os.path.exists(root_dir))
+
+    def test_file_creation_in_readonly_directory(self):
+        if os.name == 'nt':
+            self.skipTest('Changing directory permissions is limited on Windows')
+        
+        dir_path = os.path.join(self.mounted_dir, 'readonly_dir')
+        os.mkdir(dir_path)
+        os.chmod(dir_path, 0o555)  # Read and execute permissions only
+        
+        file_path = os.path.join(dir_path, 'test_file.txt')
+        with self.assertRaises(PermissionError):
+            with open(file_path, 'w') as f:
+                f.write('test content')
+
+    def test_disk_space_reporting(self):
+        total, used, free = shutil.disk_usage(self.mounted_dir)
+        self.assertGreater(total, 0)
+        self.assertGreater(free, 0)
+        self.assertLessEqual(used, total)
+
+# Don't forget to import necessary modules at the beginning of your file:
+# import random, concurrent.futures, fcntl, resource
     def tearDown(self):
         self.p.kill()
         time.sleep(2)
