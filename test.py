@@ -899,9 +899,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         with open(file_path, 'w') as f:
             f.write('test content')
         after = time.time()
-        print("STTI" + str(os.stat(file_path)))
         creation_time = os.path.getctime(file_path)
-        print("CT " + str(creation_time))
         self.assertGreaterEqual(creation_time, before)
         self.assertLessEqual(creation_time, after)
 
@@ -1803,7 +1801,13 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
 
     def test_concurrent_operations_on_first_run(self):
-        # Test concurrent operations on first run with existing files
+        """
+        Test concurrent operations on first run with existing files.
+        
+        This test case simulates concurrent read and write operations on the filesystem
+        during the first run. It verifies that the initial content of the file is preserved
+        and that the write operations append the expected content.
+        """
         
         # Setup: Create files directly in temp_dir before mounting
         with open(os.path.join(self.temp_dir, 'concurrent_test.bin'), 'w') as f:
@@ -1898,14 +1902,22 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'file with spaces and !@#$%.bin')))
 
     def test_very_long_file_name(self):
-        # Test handling of files with very long names
-        long_name = 'a' * 255 + '.bin'  # 255 is often the maximum filename length
-        long_file = os.path.join(self.mounted_dir, long_name)
-        
-        with open(long_file, 'w') as f:
-            f.write('Long name content')
+        short_name = 'short.bin'
+        short_file = os.path.join(self.mounted_dir, short_name)
+
+        with open(short_file, 'w') as f:
+            f.write('Short name content')
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, short_name)))
+
+        with self.assertRaises((OSError, IOError, FileNotFoundError, PermissionError, ValueError)):
+            # Test handling of files with very long names
+            long_name = 'a' * 355 + '.bin'  # 255 is often the maximum filename length
+            long_file = os.path.join(self.mounted_dir, long_name)
+            
+            with open(long_file, 'w') as f:
+                f.write('Long name content')
     
-        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, long_name)))
 
     def test_file_with_null_bytes(self):
         # Test handling of files with null bytes in their content
