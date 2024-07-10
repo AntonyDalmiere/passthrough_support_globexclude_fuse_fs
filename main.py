@@ -110,6 +110,8 @@ class PassthroughFS(LoggingMixIn,Operations):
         #Append fh to file_handles
         exposed_fh = max(self.file_handles.keys()) + 1 if self.file_handles else 0
         self.file_handles[exposed_fh] = fh
+        print(f"Opened file handle for {right_path} with fd {exposed_fh}")
+
         return exposed_fh
     
     def read(self, path, length, offset, fh):
@@ -248,6 +250,40 @@ class PassthroughFS(LoggingMixIn,Operations):
             except FuseOSError:
                 pass
 
+            def get_all_file_handles(path) -> list[int]:
+                handles = []
+                for fh, handle in self.file_handles.items():
+                    if handle.path.startswith(self.get_right_path(path)):
+                        handles.append((fh, handle.path, handle.real_fh))
+                return handles
+
+            def close_file_handles(handles):
+                for fh, _, _ in handles:
+                    self.release(None, fh)
+
+
+            def reopen_file_handles(handles, old_path, new_path):
+                for fh, old_path, real_fh in handles:
+                    relative_path = os.path.relpath(old_path, self.get_right_path(old_path))
+                    new_file_path = os.path.join(new_path, relative_path)
+                    new_right_path = self.get_right_path(new_file_path)
+                    new_real_fh = os.open(new_right_path, os.O_RDWR)
+                    self.file_handles[fh] = FileHandle(new_right_path, new_real_fh)
+
+            # Get and close all open file handles in the hierarchy
+            old_handles = get_all_file_handles(old)
+            new_handles = get_all_file_handles(new)
+
+            #get for each keys the pos of the seek
+            pos_per_fh: dict[int, int] = {}
+            for fh, handle in self.file_handles.items():
+                pos_per_fh[fh] = os.lseek(handle.real_fh, 0, os.SEEK_CUR)
+                    
+
+            close_file_handles(old_handles + new_handles)
+
+            opened_file_atime_ctime : dict[str, tuple[float, float]] = {}
+
             def recursive_copy(old_path, new_path):
                 print(f"Copying {old_path} to {new_path}")
                 if stat.S_ISDIR(self.getattr(old_path)['st_mode']):  # Directory
@@ -260,6 +296,10 @@ class PassthroughFS(LoggingMixIn,Operations):
                     destination_path = self.get_right_path(new_path)
                     os.rename(source_path, destination_path)
                 else:  # File
+                    #copy metadata to opened_file_atime_ctime
+                    opened_file_atime_ctime[new_path] = (self.getattr(old_path)['st_atime'], self.getattr(old_path)['st_ctime'])
+
+                    #copy
                     new_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
                     old_fh = self.open(old_path, os.O_RDONLY)
                     buffer_size = 4096
@@ -272,6 +312,7 @@ class PassthroughFS(LoggingMixIn,Operations):
                         offset += len(data)
                     self.release(old_path, old_fh)
                     self.release(new_path, new_fh)
+                    
 
             recursive_copy(old, new)
 
@@ -285,8 +326,19 @@ class PassthroughFS(LoggingMixIn,Operations):
                     self.unlink(path)
 
             recursive_remove(old)
+            # Reopen file handles
+            reopen_file_handles(old_handles, old, new)
+            #reset the seek for each file handles
+            for fh, pos in pos_per_fh.items():
+                os.lseek(self.file_handles[fh].real_fh, pos, os.SEEK_SET)
+
+            #set back the atime and ctime for each file
+            for path, (atime, ctime) in opened_file_atime_ctime.items():
+                os.utime(self.get_right_path(path), (atime, ctime))
+
         except Exception:
             traceback.print_exc()
+            raise
         return 0
 
     def utimens(self, path, times=None):
@@ -351,7 +403,7 @@ def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
     
     os.makedirs(name=cache_dir, exist_ok=True)
     print("Using cache directory:", cache_dir)
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint, foreground=True, allow_other=True, uid=-1, nothreads=True,debug=True)
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint, foreground=True, allow_other=True, uid=-1,ouid=-1, umask=000,nothreads=True,debug=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PassthroughFS")
