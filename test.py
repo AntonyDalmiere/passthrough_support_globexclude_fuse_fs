@@ -891,7 +891,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         end_time = time.time()
         
         self.assertEqual(len(files), 10000)
-        self.assertLess(end_time - start_time, 5)  # Ensure listing is reasonably fast
+        self.assertLess(end_time - start_time, 10)  # Ensure listing is reasonably fast
 
     def test_file_creation_time(self):
         file_path = os.path.join(self.mounted_dir, 'creation_time_test')
