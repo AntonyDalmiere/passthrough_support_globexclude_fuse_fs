@@ -618,7 +618,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             content = f.read()
         self.assertEqual(content, 'excluded content')
 
-    def test_rename_open_file(self):
+    def test_rename_open_file_2(self):
         if(os.name == 'nt'):
             self.skipTest('Rename open file is not supported on Windows')
         file_path = os.path.join(self.mounted_dir, 'open_file.txt')
@@ -1251,15 +1251,820 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.assertFalse(os.path.exists(sync_target))
 
 
-# Don't forget to import necessary modules at the beginning of your file:
-# import random, concurrent.futures, fcntl, resource
+    def test_file_migration_between_cache_and_temp(self):
+        # Steps:
+        # 1. Create a non-excluded file in temp_dir
+        # 2. Rename it to an excluded name
+        # 3. Verify it moves to cache_dir
+        # 4. Rename it back to a non-excluded name
+        # 5. Verify it moves back to temp_dir
+
+        # Expected result: File should move between temp_dir and cache_dir as its name changes
+
+        non_excluded_path = os.path.join(self.mounted_dir, 'normal_file.t')
+        excluded_path = os.path.join(self.mounted_dir, 'excluded_file.txt')
+
+        with open(non_excluded_path, 'w') as f:
+            f.write('Test content')
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'normal_file.t')))
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'normal_file.t')))
+
+        os.rename(non_excluded_path, excluded_path)
+
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'excluded_file.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_file.txt')))
+
+        os.rename(excluded_path, non_excluded_path)
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'normal_file.t')))
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'excluded_file.txt')))
+
+    def test_directory_content_repartition(self):
+        # Steps:
+        # 1. Create a directory with mixed content (excluded and non-excluded files)
+        # 2. Verify files are in the correct locations
+        # 3. Move the entire directory to an excluded name
+        # 4. Verify all contents move to cache_dir
+        # 5. Move it back to a non-excluded name
+        # 6. Verify files return to their original locations
+
+        # Expected result: Files should be distributed correctly between temp_dir and cache_dir
+
+        mixed_dir = os.path.join(self.mounted_dir, 'mixed_dir')
+        os.mkdir(mixed_dir)
+
+        with open(os.path.join(mixed_dir, 'normal'), 'w') as f:
+            f.write('Normal content')
+        with open(os.path.join(mixed_dir, 'excluded.txt'), 'w') as f:
+            f.write('Excluded content')
+
+        self.assertTrue(expr=os.path.exists(os.path.join(self.temp_dir, 'mixed_dir', 'normal')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'mixed_dir', 'excluded.txt')))
+
+        excluded_dir = os.path.join(self.mounted_dir, 'excluded_dir.txt')
+        os.rename(mixed_dir, excluded_dir)
+
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'normal')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'excluded.txt')))
+
+        os.rename(excluded_dir, mixed_dir)
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'mixed_dir', 'normal')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'mixed_dir', 'excluded.txt')))
+
+    def test_file_content_preservation_during_migration(self):
+        # Steps:
+        # 1. Create a large file with random content in temp_dir
+        # 2. Rename it to an excluded name
+        # 3. Verify content in cache_dir
+        # 4. Rename it back to non-excluded name
+        # 5. Verify content in temp_dir
+
+        # Expected result: File content should be preserved during migrations
+
+        large_file = os.path.join(self.mounted_dir, 'large_file.bin')
+        excluded_file = os.path.join(self.mounted_dir, 'large_file.txt')
+        content = os.urandom(1024 * 1024)  # 1 MB of random data
+
+        with open(large_file, 'wb') as f:
+            f.write(content)
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'large_file.bin')))
+
+        os.rename(large_file, excluded_file)
+
+        with open(excluded_file, 'rb') as f:
+            cached_content = f.read()
+        self.assertEqual(content, cached_content)
+
+        os.rename(excluded_file, large_file)
+
+        with open(large_file, 'rb') as f:
+            final_content = f.read()
+        self.assertEqual(content, final_content)
+
+    def test_symlink_behavior_with_excluded_files(self):
+        # Steps:
+        # 1. Create a non-excluded file
+        # 2. Create a symlink to this file with an excluded name
+        # 3. Verify symlink is in cache_dir and points to temp_dir
+        # 4. Read content through symlink
+        # 5. Modify content through symlink
+        # 6. Verify changes in original file
+
+        # Expected result: Symlinks should work correctly across cache_dir and temp_dir
+
+        if os.name == 'nt':
+            self.skipTest("Symlinks not fully supported on Windows")
+
+        original_file = os.path.join(self.mounted_dir, 'original.bin')
+        symlink_file = os.path.join(self.mounted_dir, 'symlink.txt')
+
+        with open(original_file, 'w') as f:
+            f.write('Original content')
+
+        os.symlink(original_file, symlink_file)
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'original.bin')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'symlink.txt')))
+
+        with open(symlink_file, 'r') as f:
+            content = f.read()
+        self.assertEqual(content, 'Original content')
+
+        with open(symlink_file, 'w') as f:
+            f.write('Modified content')
+
+        with open(original_file, 'r') as f:
+            modified_content = f.read()
+        self.assertEqual(modified_content, 'Modified content')
+
+    def test_file_deletion_across_cache_and_temp(self):
+        # Steps:
+        # 1. Create files in both cache_dir and temp_dir
+        # 2. Delete files from mounted directory
+        # 3. Verify files are removed from respective directories
+
+        # Expected result: Files should be properly deleted from both cache_dir and temp_dir
+
+        normal_file = os.path.join(self.mounted_dir, 'normal.bin')
+        excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
+
+        with open(normal_file, 'w') as f:
+            f.write('Normal content')
+        with open(excluded_file, 'w') as f:
+            f.write('Excluded content')
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'normal.bin')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded.txt')))
+
+        os.remove(normal_file)
+        os.remove(excluded_file)
+
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'normal.bin')))
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'excluded.txt')))
+
+    def test_file_overwrite_between_cache_and_temp(self):
+        # Steps:
+        # 1. Create a file in temp_dir
+        # 2. Rename it to an excluded name (moves to cache_dir)
+        # 3. Create a new file with the original name
+        # 4. Try to rename the excluded file back to the original name
+        # 5. Verify that the rename operation raises an exception
+
+        # Expected result: The rename operation should fail due to the destination file already existing
+
+        original_file = os.path.join(self.mounted_dir, 'original.bin')
+        excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
+
+        with open(original_file, 'w') as f:
+            f.write('Original content')
+
+        os.rename(original_file, excluded_file)
+
+        with open(original_file, 'w') as f:
+            f.write('New content')
+        with self.assertRaises(FileExistsError):
+            os.rename(excluded_file, original_file)
+
+        with open(original_file, 'r') as f:
+            final_content = f.read()
+        self.assertEqual(final_content, 'New content')
+        #also check in underlying file system
+        with open(os.path.join(self.temp_dir, 'original.bin'), 'r') as f:
+            final_content = f.read()
+        self.assertEqual(final_content, 'New content')
+
+    def test_concurrent_access_to_cache_and_temp(self):
+        # Steps:
+        # 1. Create files in both cache_dir and temp_dir
+        # 2. Concurrently read and write to these files
+        # 3. Verify final content of files
+
+        # Expected result: Concurrent operations should not interfere with each other
+
+        normal_file = os.path.join(self.mounted_dir, 'normal.bin')
+        excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
+
+        with open(normal_file, 'w') as f:
+            f.write('Normal content')
+        with open(excluded_file, 'w') as f:
+            f.write('Excluded content')
+
+        def update_file(file_path, content):
+            with open(file_path, 'a') as f:
+                f.write(content)
+
+        threads = []
+        for i in range(10):
+            t1 = threading.Thread(target=update_file, args=(normal_file, f' Normal{i}'))
+            t2 = threading.Thread(target=update_file, args=(excluded_file, f' Excluded{i}'))
+            threads.extend([t1, t2])
+            t1.start()
+            t2.start()
+
+        for t in threads:
+            t.join()
+
+        with open(normal_file, 'r') as f:
+            normal_content = f.read()
+        with open(excluded_file, 'r') as f:
+            excluded_content = f.read()
+
+        self.assertTrue(normal_content.startswith('Normal content'))
+        self.assertTrue(excluded_content.startswith('Excluded content'))
+        self.assertEqual(normal_content.count('Normal'), 11)
+        self.assertEqual(excluded_content.count('Excluded'), 11)
+
+    def test_large_directory_structure_repartition(self):
+        # Steps:
+        # 1. Create a large directory structure with mixed content
+        # 2. Verify correct distribution between cache_dir and temp_dir
+        # 3. Rename the root directory to an excluded name
+        # 4. Verify all content moves to cache_dir
+        # 5. Rename back to non-excluded name
+        # 6. Verify content returns to original distribution
+
+        # Expected result: Large directory structures should be correctly distributed and migrated
+
+        root_dir = os.path.join(self.mounted_dir, 'root')
+        os.makedirs(root_dir)
+
+        for i in range(100):
+            if i % 2 == 0:
+                with open(os.path.join(root_dir, f'normal_{i}.bin'), 'w') as f:
+                    f.write(f'Normal content {i}')
+            else:
+                with open(os.path.join(root_dir, f'excluded_{i}.txt'), 'w') as f:
+                    f.write(f'Excluded content {i}')
+
+        for i in range(100):
+            if i % 2 == 0:
+                self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'root', f'normal_{i}.bin')))
+            else:
+                self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'root', f'excluded_{i}.txt')))
+
+        excluded_root = os.path.join(self.mounted_dir, 'excluded_root.txt')
+        os.rename(root_dir, excluded_root)
+
+        for i in range(100):
+            self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_root.txt', f'normal_{i}.bin' if i % 2 == 0 else f'excluded_{i}.txt')))
+
+        os.rename(excluded_root, root_dir)
+
+        for i in range(100):
+            if i % 2 == 0:
+                self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'root', f'normal_{i}.bin')))
+            else:
+                self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'root', f'excluded_{i}.txt')))
+
+    def test_file_system_operations_on_cache_and_temp(self):
+        # Steps:
+        # 1. Create files in both cache_dir and temp_dir
+        # 2. Perform various file system operations (stat, chmod, chown, etc.)
+        # 3. Verify operations work correctly for both types of files
+
+        # Expected result: File system operations should work consistently across cache_dir and temp_dir
+
+        normal_file = os.path.join(self.mounted_dir, 'normal.bin')
+        excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
+
+        with open(normal_file, 'w') as f:
+            f.write('Normal content')
+        with open(excluded_file, 'w') as f:
+            f.write('Excluded content')
+
+        # Test stat
+        normal_stat = os.stat(normal_file)
+        excluded_stat = os.stat(excluded_file)
+        self.assertEqual(normal_stat.st_size, 14)
+        self.assertEqual(excluded_stat.st_size, 16)
+
+        if os.name != 'nt':
+            # Test chmod
+            os.chmod(normal_file, 0o644)
+            os.chmod(excluded_file, 0o644)
+            self.assertEqual(stat.S_IMODE(os.stat(normal_file).st_mode), 0o644)
+            self.assertEqual(stat.S_IMODE(os.stat(excluded_file).st_mode), 0o644)
+        else:
+            self.assertTrue(os.access(normal_file, os.R_OK))
+            self.assertTrue(os.access(excluded_file, os.R_OK)) 
+        # Test utime
+        new_time = time.time()
+        os.utime(normal_file, (new_time, new_time))
+        os.utime(excluded_file, (new_time, new_time))
+        self.assertAlmostEqual(os.stat(normal_file).st_mtime, new_time, delta=1)
+        self.assertAlmostEqual(os.stat(excluded_file).st_mtime, new_time, delta=1)
+   
+    def test_file_time_preservation(self):
+        # Steps:
+        # 1. Create a file in temp_dir and note its creation time
+        # 2. Rename the file to an excluded name (moving it to cache_dir)
+        # 3. Verify the creation time is preserved
+        # 4. Rename it back to a non-excluded name
+        # 5. Verify the creation time is still preserved
+
+        # Expected result: File creation time should be preserved across moves between cache_dir and temp_dir
+
+        normal_file = os.path.join(self.mounted_dir, 'normal.bin')
+        excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
+
+        with open(normal_file, 'w') as f:
+            f.write('Test content')
+
+        original_atime = os.path.getatime(normal_file)
+        original_mtime = os.path.getmtime(normal_file)
+        time.sleep(1)  # Ensure some time passes
+        os.rename(normal_file, excluded_file)
+
+        excluded_atime = os.path.getatime(excluded_file)
+        excluded_mtime = os.path.getmtime(excluded_file)
+        self.assertAlmostEqual(original_atime, excluded_atime, delta=0.1)
+        self.assertAlmostEqual(original_mtime, excluded_mtime, delta=0.1)
+
+
+    def test_rename_between_excluded_and_non_excluded_directories(self):
+        # Steps:
+        # 1. Create a non-excluded directory with files
+        # 2. Create an excluded directory
+        # 3. Move a file from non-excluded to excluded directory
+        # 4. Verify file moves to cache_dir
+        # 5. Move the file back to non-excluded directory
+        # 6. Verify file moves to temp_dir
+
+        # Expected result: Files should move between cache_dir and temp_dir when renamed across directories
+
+        normal_dir = os.path.join(self.mounted_dir, 'normal_dir')
+        excluded_dir = os.path.join(self.mounted_dir, 'excluded_dir.txt')
+        os.makedirs(normal_dir)
+        os.makedirs(excluded_dir)
+
+        normal_file = os.path.join(normal_dir, 'file.bin')
+        with open(normal_file, 'w') as f:
+            f.write('Test content')
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'normal_dir', 'file.bin')))
+
+        excluded_file = os.path.join(excluded_dir, 'file.bin')
+        os.rename(normal_file, excluded_file)
+
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'normal_dir', 'file.bin')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'file.bin')))
+
+        os.rename(excluded_file, normal_file)
+
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'normal_dir', 'file.bin')))
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'file.bin')))
+
+
+
+    def test_file_descriptor_persistence_across_renames(self):
+        # Steps:
+        # 1. Create and open a file in temp_dir
+        # 2. Rename the file to an excluded name
+        # 3. Write to the file using the original file descriptor
+        # 4. Close the file descriptor
+        # 5. Verify the content in the new location (cache_dir)
+
+        # Expected result: File descriptor should remain valid after rename, content should be in new location
+
+        normal_file = os.path.join(self.mounted_dir, 'normal.bin')
+        excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
+
+        fd = os.open(normal_file, os.O_WRONLY | os.O_CREAT)
+        os.write(fd, b'Initial content')
+
+
+        os.write(fd, b' Additional content')
+        os.close(fd)
+        os.rename(normal_file, excluded_file)
+
+        with open(excluded_file, 'r') as f:
+            content = f.read()
+
+        self.assertEqual(content, 'Initial content Additional content')
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'normal.bin')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded.txt')))
+
+    def test_first_run_with_existing_files(self):
+        # End-to-end test for first run with existing files
+        
+        # Setup: Create files directly in temp_dir before mounting
+        with open(os.path.join(self.temp_dir, 'existing_normal.bin'), 'w') as f:
+            f.write('Existing normal content')
+        with open(os.path.join(self.temp_dir, 'existing_excluded.txt'), 'w') as f:
+            f.write('Existing excluded content')
+        
+        # Restart the filesystem to simulate first run
+        self.p.kill()
+        time.sleep(2)
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        self.p.start()
+        time.sleep(5)
+        
+        # Test: Verify files are accessible and in correct locations
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'existing_normal.bin')))
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'existing_excluded.txt')))
+        
+        with open(os.path.join(self.mounted_dir, 'existing_normal.bin'), 'r') as f:
+            self.assertEqual(f.read(), 'Existing normal content')
+        with open(os.path.join(self.mounted_dir, 'existing_excluded.txt'), 'r') as f:
+            self.assertEqual(f.read(), 'Existing excluded content')
+        
+        # Verify excluded file has been moved to cache_dir
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'existing_excluded.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'existing_excluded.txt')))
+
+    def test_write_directly_to_temp_dir(self):
+        # Test writing directly to temp_dir
+        
+        # Write a file directly to temp_dir
+        with open(os.path.join(self.temp_dir, 'direct_write.bin'), 'w') as f:
+            f.write('Direct write content')
+        
+        # Verify the file is visible in the mounted directory
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'direct_write.bin')))
+        
+        # Read the file through the mounted directory
+        with open(os.path.join(self.mounted_dir, 'direct_write.bin'), 'r') as f:
+            self.assertEqual(f.read(), 'Direct write content')
+        
+        # Modify the file through the mounted directory
+        with open(os.path.join(self.mounted_dir, 'direct_write.bin'), 'a') as f:
+            f.write(' Modified')
+        
+        # Verify changes are reflected in temp_dir
+        with open(os.path.join(self.temp_dir, 'direct_write.bin'), 'r') as f:
+            self.assertEqual(f.read(), 'Direct write content Modified')
+
+    def test_create_excluded_file_directly_in_temp_dir(self):
+        # Test creating an excluded file directly in temp_dir
+        
+        # Create an excluded file directly in temp_dir
+        with open(os.path.join(self.temp_dir, 'direct_excluded.txt'), 'w') as f:
+            f.write('Direct excluded content')
+        
+        # Verify the file is visible in the mounted directory
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'direct_excluded.txt')))
+        
+        # Read the file through the mounted directory
+        with open(os.path.join(self.mounted_dir, 'direct_excluded.txt'), 'r') as f:
+            self.assertEqual(f.read(), 'Direct excluded content')
+        
+        # Modify the file through the mounted directory
+        with open(os.path.join(self.mounted_dir, 'direct_excluded.txt'), 'a') as f:
+            f.write(' Modified')
+        
+        # Verify changes are reflected in cache_dir and not in temp_dir
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'direct_excluded.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'direct_excluded.txt')))
+        with open(os.path.join(self.cache_dir, 'direct_excluded.txt'), 'r') as f:
+            self.assertEqual(f.read(), 'Direct excluded content Modified')
+
+    def test_misplaced_files_handling(self):
+        # Test handling of misplaced files (excluded files in temp_dir and non-excluded in cache_dir)
+        
+        # Setup: Create misplaced files
+        with open(os.path.join(self.temp_dir, 'misplaced_excluded.txt'), 'w') as f:
+            f.write('Misplaced excluded content')
+        with open(os.path.join(self.cache_dir, 'misplaced_normal.bin'), 'w') as f:
+            f.write('Misplaced normal content')
+        
+        # Restart the filesystem to simulate first run
+        self.p.kill()
+        time.sleep(2)
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        self.p.start()
+        time.sleep(5)
+        
+        # Verify files are accessible and in correct locations
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'misplaced_excluded.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'misplaced_normal.bin')))
+        
+        # Verify excluded file has been moved to cache_dir
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'misplaced_excluded.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'misplaced_excluded.txt')))
+        
+        # Verify non-excluded file has been moved to temp_dir
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'misplaced_normal.bin')))
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'misplaced_normal.bin')))
+
+    def test_complex_directory_structure_first_run(self):
+        # Test handling of a complex directory structure on first run
+        
+        # Setup: Create a complex directory structure directly in temp_dir and cache_dir
+        os.makedirs(os.path.join(self.temp_dir, 'dir1', 'subdir1'))
+        os.makedirs(os.path.join(self.temp_dir, 'dir2'))
+        os.makedirs(os.path.join(self.cache_dir, 'dir3.txt'))
+        
+        with open(os.path.join(self.temp_dir, 'dir1', 'file1.bin'), 'w') as f:
+            f.write('Content 1')
+        with open(os.path.join(self.temp_dir, 'dir1', 'subdir1', 'file2.txt'), 'w') as f:
+            f.write('Content 2')
+        with open(os.path.join(self.temp_dir, 'dir2', 'file3.txt'), 'w') as f:
+            f.write('Content 3')
+        with open(os.path.join(self.cache_dir, 'dir3.txt', 'file4.bin'), 'w') as f:
+            f.write('Content 4')
+        
+        # Restart the filesystem to simulate first run
+        self.p.kill()
+        time.sleep(2)
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        self.p.start()
+        time.sleep(5)
+        
+        # Verify directory structure and file locations
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'dir1', 'file1.bin')))
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'dir1', 'subdir1', 'file2.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'dir2', 'file3.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'dir3.txt', 'file4.bin')))
+        
+        # Verify excluded files and directories are in cache_dir
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'dir1', 'subdir1', 'file2.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'dir2', 'file3.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'dir3.txt')))
+        
+        # Verify non-excluded files are in temp_dir
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'dir1', 'file1.bin')))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'dir3.txt', 'file4.bin')))
+        
+        #move dir3.txt to temp_dir
+        os.rename(os.path.join(self.mounted_dir, 'dir3.txt'), os.path.join(self.mounted_dir, 'dir3'))
+
+
+        #check dir3 is no longer present in cache_dir and present in temp_dir
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'dir3.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'dir3.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'dir3')))
+        self.assertFalse(os.path.exists(os.path.join(self.cache_dir, 'dir3')))
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'dir3')))
+        self.assertFalse(os.path.exists(os.path.join(self.mounted_dir, 'dir3.txt')))
+
+
+    def test_concurrent_operations_on_first_run(self):
+        # Test concurrent operations on first run with existing files
+        
+        # Setup: Create files directly in temp_dir before mounting
+        with open(os.path.join(self.temp_dir, 'concurrent_test.bin'), 'w') as f:
+            f.write('Initial content')
+        
+        # Restart the filesystem to simulate first run
+        self.p.kill()
+        time.sleep(2)
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        self.p.start()
+        time.sleep(5)
+        
+        def read_file():
+            with open(os.path.join(self.mounted_dir, 'concurrent_test.bin'), 'r') as f:
+                return f.read()
+        
+        def write_file():
+            with open(os.path.join(self.mounted_dir, 'concurrent_test.bin'), 'a') as f:
+                f.write(' Appended')
+        
+        # Run concurrent read and write operations
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(read_file) for _ in range(5)] + [executor.submit(write_file) for _ in range(5)] # type: ignore
+            concurrent.futures.wait(futures)
+        
+        # Verify final content
+        with open(os.path.join(self.mounted_dir, 'concurrent_test.bin'), 'r') as f:
+            content = f.read()
+        self.assertTrue(content.startswith('Initial content'))
+        self.assertEqual(content.count('Appended'), 5)
+
+    def test_rename_chain_across_exclusions(self):
+        # Test a chain of renames across excluded and non-excluded files
+        file1 = os.path.join(self.mounted_dir, 'file1.bin')
+        file2 = os.path.join(self.mounted_dir, 'file2.txt')
+        file3 = os.path.join(self.mounted_dir, 'file3.bin')
+        
+        with open(file1, 'w') as f:
+            f.write('Content')
+        
+        os.rename(file1, file2)
+        os.rename(file2, file3)
+        
+        self.assertFalse(os.path.exists(file1))
+        self.assertFalse(os.path.exists(file2))
+        self.assertTrue(os.path.exists(file3))
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'file3.bin')))
+
+    def test_excluded_file_in_non_excluded_directory(self):
+        # Test handling of an excluded file in a non-excluded directory
+        dir_path = os.path.join(self.mounted_dir, 'normal_dir')
+        os.makedirs(dir_path)
+        file_path = os.path.join(dir_path, 'excluded_file.txt')
+        
+        with open(file_path, 'w') as f:
+            f.write('Excluded content')
+        
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'normal_dir', 'excluded_file.txt')))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, 'normal_dir', 'excluded_file.txt')))
+
+    def test_non_excluded_file_in_excluded_directory(self):
+        # Test handling of a non-excluded file in an excluded directory
+        dir_path = os.path.join(self.mounted_dir, 'excluded_dir.txt')
+        os.makedirs(dir_path)
+        file_path = os.path.join(dir_path, 'normal_file.bin')
+        
+        with open(file_path, 'w') as f:
+            f.write('Normal content')
+        
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'normal_file.bin')))
+
+    def test_file_operations_at_root(self):
+        # Test file operations at the root of the mounted directory
+        root_file = os.path.join(self.mounted_dir, 'root_file.bin')
+        
+        with open(root_file, 'w') as f:
+            f.write('Root content')
+        
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'root_file.bin')))
+        
+        os.rename(root_file, os.path.join(self.mounted_dir, 'root_file.txt'))
+        
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'root_file.txt')))
+
+    def test_file_with_special_characters(self):
+        # Test handling of files with special characters in their names
+        special_file = os.path.join(self.mounted_dir, 'file with spaces and !@#$%.bin')
+        
+        with open(special_file, 'w') as f:
+            f.write('Special content')
+        
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'file with spaces and !@#$%.bin')))
+
+    def test_very_long_file_name(self):
+        # Test handling of files with very long names
+        long_name = 'a' * 255 + '.bin'  # 255 is often the maximum filename length
+        long_file = os.path.join(self.mounted_dir, long_name)
+        
+        with open(long_file, 'w') as f:
+            f.write('Long name content')
+    
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, long_name)))
+
+    def test_file_with_null_bytes(self):
+        # Test handling of files with null bytes in their content
+        null_file = os.path.join(self.mounted_dir, 'null_file.bin')
+        content = b'Before\x00After'
+        
+        with open(null_file, 'wb') as f:
+            f.write(content)
+        
+        with open(null_file, 'rb') as f:
+            read_content = f.read()
+        
+        self.assertEqual(content, read_content)
+
+    def test_rapid_create_delete_cycle(self):
+        # Test rapid creation and deletion of files
+        file_path = os.path.join(self.mounted_dir, 'rapid_file.bin')
+        
+        for _ in range(100):
+            with open(file_path, 'w') as f:
+                f.write('Rapid content')
+            os.remove(file_path)
+        
+        self.assertFalse(os.path.exists(file_path))
+
+    def test_rename_to_existing_file_overwrite(self):
+        # Test renaming a file to an existing file name (should overwrite)
+        file1 = os.path.join(self.mounted_dir, 'file1.bin')
+        file2 = os.path.join(self.mounted_dir, 'file2.bin')
+        
+        with open(file1, 'w') as f:
+            f.write('Content 1')
+        with open(file2, 'w') as f:
+            f.write('Content 2')
+        
+        os.replace(file1, file2)
+        
+        self.assertFalse(os.path.exists(file1))
+        with open(file2, 'r') as f:
+            self.assertEqual(f.read(), 'Content 1')
+
+    def test_open_file_after_unlink(self):
+        # Test opening a file immediately after unlinking it
+        file_path = os.path.join(self.mounted_dir, 'unlink_test.bin')
+        
+        with open(file_path, 'w') as f:
+            f.write('Unlink test')
+        
+        os.unlink(file_path)
+        
+        with self.assertRaises(FileNotFoundError):
+            open(file_path, 'r')
+
+    def test_rename_open_file_1(self):
+        # Test renaming a file while it's open
+        file1 = os.path.join(self.mounted_dir, 'open_file.bin')
+        file2 = os.path.join(self.mounted_dir, 'renamed_open_file.bin')
+        
+        if os.name == 'nt':
+            with self.assertRaises(OSError):
+                with open(file1, 'w') as f:
+                    f.write('Open file content')
+                    os.rename(file1, file2)
+        else:
+            with open(file1, 'w') as f:
+                f.write('Open file content')
+                os.rename(file1, file2)
+                f.write(' Additional content')
+            
+            self.assertFalse(os.path.exists(file1))
+            with open(file2, 'r') as f:
+                self.assertEqual(f.read(), 'Open file content Additional content')
+
+    def test_excluded_file_hard_link(self):
+        #not supported
+        file1 = os.path.join(self.mounted_dir, 'excluded_file.bin')
+        file2 = os.path.join(self.mounted_dir, 'hard_link.bin')
+
+        with self.assertRaises(OSError):
+            os.link(file1, file2)
+
+    def test_mmap_excluded_file(self):
+        # Test memory-mapping an excluded file
+        import mmap
+        
+        file_path = os.path.join(self.mounted_dir, 'mmap_test.txt')
+        
+        with open(file_path, mode='w+b') as f:
+            f.write(b'2' * 1024)
+            f.flush()
+            mmapped = mmap.mmap(f.fileno(), 1024)
+            mmapped[0:5] = b'12345'
+            self.assertEqual(mmapped[-5:], b'22222')
+            mmapped.close()
+        
+        with open(file_path, 'rb') as f:
+            content = f.read()
+            self.assertEqual(content[:5], b'12345')
+            self.assertEqual(content[5:], b'2' * 1019)
+
+    def test_file_descriptor_inheritance(self):
+
+        #skip if windows
+        if os.name == 'nt':
+            self.skipTest("fork not supported on Windows")
+        
+        file_path = os.path.join(self.mounted_dir, 'inheritance_test.bin')
+        
+        with open(file_path, 'w') as f:
+            f.write('Initial content')
+            fd = f.fileno()
+            pid = os.fork()
+            
+            if pid == 0:
+                # Child process
+                os.write(fd, b" Inherited")
+                os._exit(0)
+            else:
+                # Parent process
+                os.waitpid(pid, 0)
+        
+        with open(file_path, 'r') as f:
+            self.assertEqual(f.read(), 'Initial content Inherited')
+
+    def test_excluded_directory_operations(self):
+        # Test operations on an excluded directory
+        dir_path = os.path.join(self.mounted_dir, 'excluded_dir.txt')
+        os.makedirs(dir_path)
+        
+        file_path = os.path.join(dir_path, 'file.bin')
+        with open(file_path, 'w') as f:
+            f.write('Excluded dir content')
+        
+        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'excluded_dir.txt', 'file.bin')))
+        
+        os.rename(dir_path, os.path.join(self.mounted_dir, 'renamed_excluded_dir'))
+        
+        self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'renamed_excluded_dir', 'file.bin')))
+
+    def test_file_locking(self):
+        with self.assertRaises(Exception):
+            # Test file locking
+            import fcntl
+            file_path = os.path.join(self.mounted_dir, 'locked_file.bin')
+            
+            with open(file_path, 'w') as f:
+                f.write('Locking test')
+            
+                with open(file_path, 'r') as f:
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def tearDown(self):
         self.p.kill()
         time.sleep(2)
         #remove the temporary directories even if they are not empty
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         shutil.rmtree(self.cache_dir, ignore_errors=True)
-  
+
         shutil.rmtree(self.mounted_dir, ignore_errors=True)
 
 if __name__ == '__main__':
