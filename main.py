@@ -217,7 +217,7 @@ class PassthroughFS(LoggingMixIn,Operations):
             'f_ffree': stv.total // block_size,  # number of free inodes
             'f_favail': stv.total // block_size,  # number of free inodes for unprivileged users
             'f_flag': 0,  # mount flags
-            'f_namemax': 1024,  # maximum filename length,
+            'f_namemax': 255,  # maximum filename length,
             'f_fsid': 123456789,  # Filesystem ID: Some unique identifier
         }
 
