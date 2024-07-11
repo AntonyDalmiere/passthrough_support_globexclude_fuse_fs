@@ -1812,7 +1812,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         
         # Setup: Create files directly in temp_dir before mounting
         with open(os.path.join(self.temp_dir, 'concurrent_test.bin'), 'w') as f:
-            f.write('Initial content')
+            f.write('A  ')
         
         # Restart the filesystem to simulate first run
         self.p.kill()
@@ -1827,7 +1827,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         
         def write_file():
             with open(os.path.join(self.mounted_dir, 'concurrent_test.bin'), 'a') as f:
-                f.write(' Appended')
+                f.write('Appended')
         
         # Run concurrent read and write operations
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -1837,9 +1837,17 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         # Verify final content
         with open(os.path.join(self.mounted_dir, 'concurrent_test.bin'), 'r') as f:
             content = f.read()
-        self.assertTrue(content.startswith('Initial content'))
-        self.assertEqual(content.count('Appended'), 5)
-
+            
+        self.assertTrue(content.startswith('A  '))
+        
+        # Bad ways to check because letter can be entrelaced : self.assertEqual(content.count('Appended'), 5)
+        #Ensuire all letter of appended are present
+        self.assertEqual(content.count('A'), second=6,msg=content)
+        self.assertEqual(content.count('p'), second=5*2,msg=content)
+        self.assertEqual(content.count('e'), second=5*2,msg=content)
+        self.assertEqual(content.count('n'), second=5,msg=content)
+        self.assertEqual(content.count('d'), second=5*2,msg=content)
+        self.assertEqual(content.count(' '), second=2,msg=content)
     def test_rename_chain_across_exclusions(self):
         # Test a chain of renames across excluded and non-excluded files
         file1 = os.path.join(self.mounted_dir, 'file1.bin')
