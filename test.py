@@ -1830,7 +1830,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
                 f.write('Appended')
         
         # Run concurrent read and write operations
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(read_file) for _ in range(5)] + [executor.submit(write_file) for _ in range(5)] # type: ignore
             concurrent.futures.wait(futures)
         
