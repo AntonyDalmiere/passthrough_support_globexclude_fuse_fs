@@ -545,17 +545,19 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.assertEqual(len(content), size)
 
     def test_concurrent_file_operations(self):
+        import random
+        import time
         def worker(file_name, content):
             file_path = os.path.join(self.mounted_dir, file_name)
             with open(file_path, 'w') as f:
                 f.write(content)
-            time.sleep(0.1)
+            time.sleep(random.uniform(0.1, 0.3))
             with open(file_path, 'r') as f:
                 return f.read()
 
         threads = []
         results = {}
-        for i in range(10):
+        for i in range(100):
             t = threading.Thread(target=lambda: results.update({f'file_{i}.txt': worker(f'file_{i}.txt', f'content_{i}')}))
             threads.append(t)
             t.start()
