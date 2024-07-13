@@ -8,7 +8,7 @@ import threading
 import unittest
 
 import psutil
-from main import start_passthrough_fs
+from passthrough_support_excludeglob_fs import start_passthrough_fs
 import multiprocessing
 import time
 import random
