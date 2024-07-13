@@ -1,1 +1,1 @@
-from .main import start_passthrough_fs
+from .main import start_passthrough_fs,cli

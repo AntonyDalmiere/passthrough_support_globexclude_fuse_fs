@@ -3,7 +3,6 @@ from setuptools.command.install import install
 
 
 
-
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
@@ -34,7 +33,7 @@ class CustomInstall(install):
         install.run(self)
 
 setup(
-    name='passthrough_support_excludeglob_fuse_py',
+    name='passthrough_support_excludeglob_fs',
     version='0.1',
     packages=find_packages(),
     description='A short description of your package',
@@ -55,4 +54,9 @@ setup(
     keywords='fuse, filesystem, passthrough, excludeglob',
     install_requires=requirements,
     cmdclass={'install':CustomInstall},
+    entry_points={
+        'console_scripts': [
+            'passthrough_support_excludeglob_fs=passthrough_support_excludeglob_fs:cli',
+        ],
+    },
 )
