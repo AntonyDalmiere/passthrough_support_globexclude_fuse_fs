@@ -407,11 +407,24 @@ def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
     print("Using cache directory:", cache_dir)
     fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint, foreground=True, allow_other=True, uid=-1,ouid=-1, umask=000,nothreads=True,debug=True)
 
-if __name__ == "__main__":
+def cli():
     parser = argparse.ArgumentParser(description="PassthroughFS")
     parser.add_argument("mountpoint", help="Mount point for the filesystem")
-    parser.add_argument("root", help="Root directory for the filesystem")
-    parser.add_argument("--patterns", nargs="*", help="Exclude patterns")
-    parser.add_argument("--cache-dir", help="Cache directory")
+    parser.add_argument("-o", "--options", help="Mount options")
     args = parser.parse_args()
-    start_passthrough_fs(args.mountpoint, args.root, args.patterns, args.cache_dir)
+
+    options = {}
+    if args.options:
+        options = dict(opt.split('=') for opt in args.options.split(','))
+
+    root = options.get('root')
+    patterns = options.get('patterns', '').split(':') if 'patterns' in options else None
+    cache_dir = options.get('cache_dir')
+
+    if not root:
+        parser.error("Root directory must be specified in options")
+
+    start_passthrough_fs(args.mountpoint, root, patterns, cache_dir)
+
+if __name__ == "__main__":
+    cli()
