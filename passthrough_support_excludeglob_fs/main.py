@@ -78,7 +78,7 @@ class PassthroughFS(LoggingMixIn,Operations):
     def getattr(self, path, fh=None):
         right_path = self.get_right_path(path)
         if not os.path.exists(right_path):
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+            raise FuseOSError(errno.ENOENT)
         st = os.lstat(right_path)
        
         #Edit st to make user RWX perm
