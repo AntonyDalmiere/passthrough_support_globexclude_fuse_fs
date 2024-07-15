@@ -1,0 +1,4 @@
+pytest
+pytest-progress
+wheel
+setuptools
