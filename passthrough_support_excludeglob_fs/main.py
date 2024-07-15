@@ -32,6 +32,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         self.patterns = patterns
         self.cache_dir = cache_dir
         self.file_handles: Dict[int, FileHandle] = {} 
+        self.use_ns = True
 
     def get_right_path(self, path):
         full_path = self.get_full_path(path)
@@ -71,9 +72,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         right_path = self.get_right_path(path)
         if not os.path.exists(right_path):
             raise FuseOSError(errno.ENOENT)
-        if not os.access(right_path, mode):
-            raise FuseOSError(errno.EACCES)
-        return 0
+        return os.access(right_path, mode)
 
     def getattr(self, path, fh=None):
         right_path = self.get_right_path(path)
