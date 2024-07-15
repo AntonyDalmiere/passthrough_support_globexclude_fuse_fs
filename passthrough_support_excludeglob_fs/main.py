@@ -134,8 +134,7 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def write(self, path, buf, offset, fh):
         if fh not in self.file_handles:
-            raise KeyError(f"File handle {fh} not found")
-
+            raise FuseOSError(errno.EBADF)
         right_path = self.get_right_path(path)
 
         if not os.path.exists(right_path):
