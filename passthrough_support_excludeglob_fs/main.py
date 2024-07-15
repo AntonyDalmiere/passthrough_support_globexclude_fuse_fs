@@ -250,8 +250,11 @@ class PassthroughFS(LoggingMixIn,Operations):
             try:
                 if self.access(new, os.R_OK) == 0:
                     raise FuseOSError(errno.EEXIST)
-            except FuseOSError:
-                pass
+            except FuseOSError as e:
+                if e.errno == errno.EEXIST:
+                    raise
+                else:
+                    pass
 
             def get_all_file_handles(path) -> list[int]:
                 handles = []
