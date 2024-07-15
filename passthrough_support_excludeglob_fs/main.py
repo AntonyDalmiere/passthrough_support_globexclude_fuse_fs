@@ -111,8 +111,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         #Append fh to file_handles
         exposed_fh = max(self.file_handles.keys()) + 1 if self.file_handles else 0
         self.file_handles[exposed_fh] = fh
-        print(f"Opened file handle for {right_path} with fd {exposed_fh}")
-
         return exposed_fh
     
     def read(self, path, length, offset, fh):
