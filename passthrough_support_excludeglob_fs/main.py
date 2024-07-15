@@ -140,22 +140,27 @@ class PassthroughFS(LoggingMixIn,Operations):
         if not os.path.exists(right_path):
             raise FuseOSError(errno.ENOENT)
 
-        with open(right_path, 'r+b' if os.path.exists(right_path) else 'wb') as f:
-            f.seek(offset)
-            total_written = 0
-            while total_written < len(buf):
-                written = f.write(buf[total_written:])
-                if written == 0:
-                    raise IOError("Failed to write entire buffer") 
-                total_written += written
-
+        # with open(right_path, 'r+b' if os.path.exists(right_path) else 'wb') as f:
+        #     f.seek(offset)
+        #     total_written = 0
+        #     while total_written < len(buf):
+        #         written = f.write(buf[total_written:])
+        #         if written == 0:
+        #             raise IOError("Failed to write entire buffer") 
+        #         total_written += written
+        #use os.write instead
+        os.lseek(self.file_handles[fh].real_fh, offset, os.SEEK_SET)
+        #Display file chmod
+        print(f'File read access: {oct(os.lstat(right_path).st_mode)}')
+        print(f'File write access: {os.access(right_path, os.W_OK)}')
+        total_written = os.write(self.file_handles[fh].real_fh, buf)
         os.fsync(self.file_handles[fh].real_fh)
         return total_written
     
     def chmod(self, path, mode):
         right_path = self.get_right_path(path)
         if os.path.exists(right_path):
-            os.chmod(right_path, mode)
+            return os.chmod(right_path, mode)
         else:
             raise FuseOSError(errno.ENOENT)
 
