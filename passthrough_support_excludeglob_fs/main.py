@@ -408,8 +408,7 @@ def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
     
     os.makedirs(name=cache_dir, exist_ok=True)
     print("Using cache directory:", cache_dir)
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint, foreground=True, allow_other=True, uid=-1,ouid=-1, umask=000,nothreads=True,debug=True)
-
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint,foreground=True,nothreads=True,debug=True)
 def cli():
     parser = argparse.ArgumentParser(description="PassthroughFS")
     parser.add_argument("mountpoint", help="Mount point for the filesystem")
