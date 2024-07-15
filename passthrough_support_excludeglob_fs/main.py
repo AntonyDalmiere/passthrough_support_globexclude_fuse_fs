@@ -114,7 +114,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         return exposed_fh
     
     def read(self, path, length, offset, fh):
-        if(self.access(path, os.R_OK) != 0):
+        if(not self.access(path, os.R_OK)):
             raise FuseOSError(errno.EACCES)
         
         right_path = self.get_right_path(path)
@@ -244,11 +244,11 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def rename(self, old, new):
         try:
-            if(self.access(old, os.R_OK) != 0):
+            if(not self.access(old, os.R_OK)):
                 raise FuseOSError(errno.ENOENT)
 
             try:
-                if self.access(new, os.R_OK) == 0:
+                if self.access(new, os.R_OK):
                     raise FuseOSError(errno.EEXIST)
             except FuseOSError as e:
                 if e.errno == errno.EEXIST:
