@@ -291,7 +291,6 @@ class PassthroughFS(LoggingMixIn,Operations):
             opened_file_atime_ctime : dict[str, tuple[float, float]] = {}
 
             def recursive_copy(old_path, new_path):
-                print(f"Copying {old_path} to {new_path}")
                 if stat.S_ISDIR(self.getattr(old_path)['st_mode']):  # Directory
                     self.mkdir(new_path, self.getattr(old_path)['st_mode'])
                     for item in self.readdir(old_path,None):
