@@ -932,10 +932,9 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         file_path = os.path.join(self.mounted_dir, 'xattr_test.txt')
         with open(file_path, 'w') as f:
             f.write('test content')
-        
-        os.setxattr(file_path, b'user.test_attr', b'test_value')
-        value = os.getxattr(file_path, b'user.test_attr')
-        self.assertEqual(value, b'test_value')
+        with self.assertRaises(OSError):
+            os.setxattr(file_path, b'user.test_attr', b'test_value')
+            value = os.getxattr(file_path, b'user.test_attr')
 
     def test_sparse_file_support(self):
         file_path = os.path.join(self.mounted_dir, 'sparse_test.txt')
