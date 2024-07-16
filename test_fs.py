@@ -171,6 +171,9 @@ class TestFSOperations(unittest.TestCase):
 
     def tearDown(self):
         self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
         time.sleep(2)
         #remove the temporary directories even if they are not empty
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -2111,6 +2114,9 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
     def tearDown(self):
         self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
         time.sleep(2)
         #remove the temporary directories even if they are not empty
         shutil.rmtree(self.temp_dir, ignore_errors=True)
