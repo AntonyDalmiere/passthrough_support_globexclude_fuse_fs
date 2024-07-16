@@ -3,7 +3,7 @@
 import os
 import stat
 import sys
-from typing import Dict
+from typing import Dict, Literal
 from refuse import _refactor
 _refactor.sys = sys # type: ignore
 from refuse.high import FUSE, FuseOSError, Operations,LoggingMixIn
@@ -32,7 +32,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         self.patterns = patterns
         self.cache_dir = cache_dir
         self.file_handles: Dict[int, FileHandle] = {} 
-        self.use_ns = True
+        # self.use_ns = True
 
     def get_right_path(self, path):
         full_path = self.get_full_path(path)
