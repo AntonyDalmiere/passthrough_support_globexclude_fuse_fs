@@ -1674,9 +1674,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             f.write('Existing excluded content')
         
         # Restart the filesystem to simulate first run
+        time.sleep(1)
         self.p.kill()
-        time.sleep(2)
-        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['**/*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
         self.p.start()
         time.sleep(5)
         
@@ -1749,9 +1752,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             f.write('Misplaced normal content')
         
         # Restart the filesystem to simulate first run
+        time.sleep(1)
         self.p.kill()
-        time.sleep(2)
-        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['**/*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
         self.p.start()
         time.sleep(5)
         
@@ -1785,9 +1791,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             f.write('Content 4')
         
         # Restart the filesystem to simulate first run
+        time.sleep(1)
         self.p.kill()
-        time.sleep(2)
-        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['**/*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
         self.p.start()
         time.sleep(5)
         
@@ -1833,9 +1842,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             f.write('A  ')
         
         # Restart the filesystem to simulate first run
+        time.sleep(1)
         self.p.kill()
-        time.sleep(2)
-        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['**/*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
         self.p.start()
         time.sleep(5)
         
