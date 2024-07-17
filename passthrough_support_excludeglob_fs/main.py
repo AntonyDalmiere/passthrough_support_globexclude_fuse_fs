@@ -249,7 +249,8 @@ class PassthroughFS(LoggingMixIn,Operations):
 
             try:
                 if self.access(new, os.R_OK):
-                    raise FuseOSError(errno.EEXIST)
+                    if os.name == 'nt':
+                        raise FuseOSError(errno.EEXIST)
             except FuseOSError as e:
                 if e.errno == errno.EEXIST:
                     raise
