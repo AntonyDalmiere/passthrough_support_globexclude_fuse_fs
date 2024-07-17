@@ -307,19 +307,19 @@ class PassthroughFS(LoggingMixIn,Operations):
                     opened_file_atime_ctime[new_path] = (self.getattr(old_path)['st_atime'], self.getattr(old_path)['st_ctime'])
 
                     #copy
-                    new_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
-                    old_fh = self.open(old_path, os.O_RDONLY)
+                    dest_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
+                    source_fh = self.open(old_path, os.O_RDONLY)
                     buffer_size = 4096
                     offset = 0
                     while True:
-                        data = self.read(old_path, buffer_size, offset, old_fh)
+                        data = self.read(old_path, buffer_size, offset, source_fh)
                         if not data:
                             break
-                        self.write(new_path, data, offset, new_fh)
+                        self.write(new_path, data, offset, dest_fh)
                         offset += len(data)
-                    self.release(old_path, old_fh)
-                    self.release(new_path, new_fh)
-                    
+                    self.release(old_path, source_fh)
+                    self.release(new_path, dest_fh)
+  
 
             recursive_copy(old, new)
 
