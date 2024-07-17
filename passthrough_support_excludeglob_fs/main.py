@@ -268,14 +268,15 @@ class PassthroughFS(LoggingMixIn,Operations):
                 for fh, _, _ in handles:
                     self.release(None, fh)
 
-
-            def reopen_file_handles(handles, old_path, new_path):
-                for fh, old_path, real_fh in handles:
-                    relative_path = os.path.relpath(old_path, self.get_right_path(old_path))
-                    new_file_path = os.path.join(new_path, relative_path)
-                    new_right_path = self.get_right_path(new_file_path)
-                    new_real_fh = os.open(new_right_path, os.O_RDWR)
-                    self.file_handles[fh] = FileHandle(new_right_path, new_real_fh)
+            #Reopen previous file handles which where moved to their new paths
+            def reopen_file_handles(handles, original_old, original_new):
+                for fh, real_old_path, real_fh in handles:
+                    # Get the new path of the file handle
+                    # Replace the old path with the new path
+                    new_path_of_handle = real_old_path.replace(self.get_right_path(original_old), self.get_right_path(original_new))
+                    
+                    new_real_fh = os.open(new_path_of_handle, os.O_RDWR)
+                    self.file_handles[fh] = FileHandle(new_path_of_handle, new_real_fh)
 
             # Get and close all open file handles in the hierarchy
             old_handles = get_all_file_handles(old)
