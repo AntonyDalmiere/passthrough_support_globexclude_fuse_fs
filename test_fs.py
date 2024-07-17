@@ -2067,19 +2067,21 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         
         file_path = os.path.join(self.mounted_dir, 'inheritance_test.bin')
         
-        with open(file_path, 'w') as f:
-            f.write('Initial content')
-            fd = f.fileno()
-            pid = os.fork()
-            
-            if pid == 0:
-                # Child process
-                os.write(fd, b" Inherited")
-                os._exit(0)
-            else:
-                # Parent process
-                os.waitpid(pid, 0)
+        f = open(file_path, 'w')
+        f.write('Initial content')
+        f.flush()
+        fd = f.fileno()
+        pid = os.fork()
         
+        if pid == 0:
+            # Child process
+            os.write(fd, b" Inherited")
+            os._exit(0)
+        else:
+            # Parent process
+            os.waitpid(pid, 0)
+        
+        f.close()
         with open(file_path, 'r') as f:
             self.assertEqual(f.read(), 'Initial content Inherited')
 
