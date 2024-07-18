@@ -39,8 +39,8 @@ class PassthroughFS(LoggingMixIn,Operations):
         cache_path = self.get_cache_path(path)
         is_excluded = self.is_excluded(path)
 
-        full_exists = os.path.exists(full_path)
-        cache_exists = os.path.exists(cache_path)
+        full_exists = os.path.lexists(full_path)
+        cache_exists = os.path.lexists(cache_path)
 
         if full_exists and cache_exists:
             # Both exist, return the most recent one
@@ -70,13 +70,13 @@ class PassthroughFS(LoggingMixIn,Operations):
     # Filesystem methods
     def access(self, path, mode):
         right_path = self.get_right_path(path)
-        if not os.path.exists(right_path):
+        if not os.path.lexists(right_path):
             raise FuseOSError(errno.ENOENT)
         return os.access(right_path, mode)
 
     def getattr(self, path, fh=None):
         right_path = self.get_right_path(path)
-        if not os.path.exists(right_path):
+        if not os.path.lexists(right_path):
             raise FuseOSError(errno.ENOENT)
         st = os.lstat(right_path)
        
@@ -101,7 +101,7 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def open(self, path, flags):
         right_path = self.get_right_path(path)
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             fh: FileHandle = FileHandle(right_path, os.open(right_path, flags))
         else:
             if flags & os.O_CREAT:
@@ -119,7 +119,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         
         right_path = self.get_right_path(path)
 
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             with open(right_path, 'rb') as f:
                 f.seek(offset)
                 data = b""
@@ -137,7 +137,7 @@ class PassthroughFS(LoggingMixIn,Operations):
             raise FuseOSError(errno.EBADF)
         right_path = self.get_right_path(path)
 
-        if not os.path.exists(right_path):
+        if not os.path.lexists(right_path):
             raise FuseOSError(errno.ENOENT)
 
         # with open(right_path, 'r+b' if os.path.exists(right_path) else 'wb') as f:
@@ -159,40 +159,38 @@ class PassthroughFS(LoggingMixIn,Operations):
     
     def chmod(self, path, mode):
         right_path = self.get_right_path(path)
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             return os.chmod(right_path, mode)
         else:
             raise FuseOSError(errno.ENOENT)
 
     def chown(self, path, uid, gid):
         right_path = self.get_right_path(path)
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             return os.chown(right_path, uid, gid)
         else:
             raise FuseOSError(errno.ENOENT)
 
     def readlink(self, path):
         right_path = self.get_right_path(path)
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             pathname = os.readlink(right_path)
         else:
             raise FuseOSError(errno.ENOENT)
-        if pathname.startswith("/"):
-            return os.path.relpath(pathname, self.root)
-        else:
-            return pathname
+        print(f'Pathname: {pathname}')
+        return pathname
 
     def rmdir(self, path):
         full_path = self.get_full_path(path)
         cache_path = self.get_cache_path(path)
         try:
-            if not os.path.exists(full_path) and not os.path.exists(cache_path):
+            if not os.path.lexists(full_path) and not os.path.lexists(cache_path):
                 raise FuseOSError(errno.ENOENT)
-            if os.path.exists(full_path):
+            if os.path.lexists(full_path):
                 #remove readonly attrib 
                 os.chmod(full_path, stat.S_IWRITE)
                 os.rmdir(full_path)
-            if os.path.exists(cache_path):
+            if os.path.lexists(cache_path):
                 os.chmod(cache_path, stat.S_IWRITE)
                 os.rmdir(cache_path)
         except OSError as e:
@@ -205,7 +203,7 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def statfs(self, path):
         right_path = self.get_right_path(path)
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             stv = psutil.disk_usage(right_path)
         else:
             raise FuseOSError(errno.ENOENT)
@@ -231,16 +229,21 @@ class PassthroughFS(LoggingMixIn,Operations):
         for fh in corresponded_file_handles:
             self.release(path, fh)
 
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             return os.unlink(right_path)
         raise FuseOSError(errno.ENOENT)
 
-    def symlink(self, name, target):
+    def symlink(self, link_location, name):
         if os.name == 'nt':
             raise FuseOSError(errno.ENOTSUP)
-        target_path = self.get_right_path(target)
-        name_path = self.get_right_path(name)
-        os.symlink(target_path, name_path)
+        link_location_path = self.get_right_path(link_location)
+        #write a file named a.txt in fulldir
+        with open(self.get_right_path("dfsdfs"), 'w') as f:
+            f.write('This is a test file')
+        #CHeck if link_location is either an absolute path relative to the mountpoint or a true absolute path
+
+
+        os.symlink(name, link_location_path)
 
     def rename(self, old, new):
         try:
@@ -350,7 +353,7 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def utimens(self, path, times=None):
         right_path = self.get_right_path(path)
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             return os.utime(right_path, times)
         else:
             raise FuseOSError(errno.ENOENT)
@@ -385,7 +388,7 @@ class PassthroughFS(LoggingMixIn,Operations):
                     
                     # If directory also exists in the full path, copy metadata (chmod and owner)
                     full_path = os.path.join(self.root, current_path)
-                    if os.path.exists(full_path):
+                    if os.path.lexists(full_path):
                         os.chmod(os.path.join(self.cache_dir, current_path), os.stat(full_path).st_mode)
                         os.chown(os.path.join(self.cache_dir, current_path), os.stat(full_path).st_uid, os.stat(full_path).st_gid)
                         # Also copy atime and ctime
@@ -395,7 +398,7 @@ class PassthroughFS(LoggingMixIn,Operations):
                     
                     # If directory also exists in the cache path, copy metadata (chmod and owner)
                     cache_path = os.path.join(self.cache_dir, current_path)
-                    if os.path.exists(cache_path):
+                    if os.path.lexists(cache_path):
                         os.chmod(os.path.join(self.root, current_path), os.stat(cache_path).st_mode)
                         os.chown(os.path.join(self.root, current_path), os.stat(cache_path).st_uid, os.stat(cache_path).st_gid)
                         # Also copy atime and ctime
@@ -412,7 +415,7 @@ class PassthroughFS(LoggingMixIn,Operations):
     
     def truncate(self, path, length, fh=None):
         right_path = self.get_right_path(path)
-        if os.path.exists(right_path):
+        if os.path.lexists(right_path):
             with open(right_path, "r+") as f:
                 f.truncate(length)
         else:
@@ -434,6 +437,10 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def flush(self, path, fh):
         pass
+
+    def lock(self, path, fh, cmd, lock):
+        return -errno.ENOTSUP
+
 
     def get_full_path(self, path):
         p = Path(self.root) / Path(path.lstrip("/"))
