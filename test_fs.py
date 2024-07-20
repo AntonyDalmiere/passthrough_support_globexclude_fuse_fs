@@ -2024,7 +2024,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         with open(file2, 'w') as f:
             f.write('Content 2')
         
-        os.replace(file1, file2)
+        if os.name == 'nt':
+            with self.assertRaisesRegex(OSError, 'exist'):
+                os.rename(file1, file2)
+            return
+        else:
+            os.rename(file1, file2)
         
         self.assertFalse(os.path.exists(file1))
         with open(file2, 'r') as f:
