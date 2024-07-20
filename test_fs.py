@@ -13,9 +13,15 @@ import multiprocessing
 import time
 import random
 import concurrent.futures
+import string
+
 def determine_mountdir_based_on_os():
     if os.name == 'nt':
-        return 'T:'
+        drive_letters = [letter for letter in string.ascii_uppercase if letter not in ['C', 'E']]
+        #get the first letter of drive that is not used
+        for drive in drive_letters:
+            if not os.path.exists(f'{drive}:'):
+                return drive + ':'
     else:
         return tempfile.mkdtemp()
     
@@ -71,15 +77,13 @@ class TestFSOperations(unittest.TestCase):
                 pass
 
     def test_write_to_read_only_file(self):
+        #permission not supported on windows
+        if os.name == 'nt':
+            self.skipTest('File permissions are not supported on Windows')
         file_path = os.path.join(self.mounted_dir, 'readonlyfile')
         with open(file_path, 'w') as f:
             f.write('test data')
-        #print permission 
-        print(oct(os.stat(file_path).st_mode))
-        #print size
         os.chmod(file_path, 0o444)  # make the file read-only
-        print(oct(os.stat(file_path).st_mode))
-
         with self.assertRaises((Exception,PermissionError)):
             with open(file_path, 'w') as f:
                 f.write('new data')
@@ -190,12 +194,11 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         # Create a new process to launch the function start_passthrough_fs
         self.p = multiprocessing.Process(target=start_passthrough_fs, args=(self.mounted_dir, self.temp_dir, ['**/*.txt','**/*.txt/*','**/*.config'], self.cache_dir))
         self.p.start()
-
+        time.sleep(5)
         #cmod mounted dir, temp dir and cache dir to the user that launch the test
         os.chmod(self.mounted_dir, 0o777)
         os.chmod(self.temp_dir, 0o777)
         os.chmod(self.cache_dir, 0o777)
-        time.sleep(5)
         
 
     def test_create_file(self):
@@ -567,16 +570,27 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
         self.assertFalse(os.path.exists(root_dir))
     
-    def test_create_and_read_large_file(self):
+    def test_create_and_read_large_file1(self):
         large_file_path = os.path.join(self.mounted_dir, 'large_file.bin')
         size = 100 * 1024 * 1024  # 100 MB
         with open(large_file_path, 'wb') as f:
-            f.write(os.urandom(size))
-        
+            value_w = f.write(os.urandom(size))
         with open(large_file_path, 'rb') as f:
             content = f.read()
-        
         self.assertEqual(len(content), size)
+
+    #same as above but the content written is not random but ordered sequence of integer. eg. 1,2,3 ...
+    def test_create_and_read_large_file2(self):
+        large_file_path = os.path.join(self.mounted_dir, 'large_file.bin')
+        max_counter = 100 * 1024 * 1024
+        content = ''.join(str(i) for i in range(max_counter))
+        with open(large_file_path, 'wb') as f:
+           
+            f.write(content.encode())
+        with open(large_file_path, 'rb') as f:
+            content = f.read()
+        self.assertEqual(len(content), os.stat(large_file_path).st_size)
+
 
     def test_concurrent_file_operations(self):
         import random
@@ -603,28 +617,22 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             self.assertEqual(results[f'file_{i}.txt'], f'content_{i}')
 
     def test_file_permissions(self):
+        if os.name == 'nt':
+            self.skipTest('File permissions are not supported on Windows')
         file_path = os.path.join(self.mounted_dir, 'permissions_test.txt')
         with open(file_path, 'w') as f:
             f.write('test content')
 
-        if os.name != 'nt': # POSIX
-            os.chmod(file_path, 0o644)
-            stat_result = os.stat(file_path)
-            self.assertEqual(stat.S_IMODE(stat_result.st_mode), 0o644)
+        os.chmod(file_path, 0o644)
+        stat_result = os.stat(file_path)
+        self.assertEqual(stat.S_IMODE(stat_result.st_mode), 0o644)
 
-            os.chmod(file_path, 0o444)
-            stat_result = os.stat(file_path)
-            self.assertEqual(stat.S_IMODE(stat_result.st_mode), 0o444)
-            with self.assertRaises(PermissionError):
-                with open(file_path, 'w') as f:
-                    f.write('should fail')
-        else: # WINDOWS
-            os.chmod(file_path, stat.S_IREAD | stat.S_IWRITE)
-            self.assertTrue(os.access(file_path, os.R_OK | os.W_OK))
-
-            os.chmod(file_path, stat.S_IREAD)
-            self.assertTrue(os.access(file_path, os.R_OK))
-            self.assertTrue(os.access(file_path, os.W_OK))
+        os.chmod(file_path, 0o444)
+        stat_result = os.stat(file_path)
+        self.assertEqual(stat.S_IMODE(stat_result.st_mode), 0o444)
+        with self.assertRaises(PermissionError):
+            with open(file_path, 'w') as f:
+                f.write('should fail')
        
 
     def test_file_timestamps(self):
@@ -1491,6 +1499,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         with open(excluded_file, 'w') as f:
             f.write('Excluded content')
 
+ 
         def update_file(file_path, content):
             with open(file_path, 'a') as f:
                 f.write(content)
@@ -1513,8 +1522,8 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
         self.assertTrue(normal_content.startswith('Normal content'))
         self.assertTrue(excluded_content.startswith('Excluded content'))
-        self.assertEqual(normal_content.count('Normal'), 11)
-        self.assertEqual(excluded_content.count('Excluded'), 11)
+        self.assertEqual(normal_content.count('Normal'), 11,f'Here is the normal content : {normal_content}')
+        self.assertEqual(excluded_content.count('Excluded'), 11, f'Here is the excluded  content : {excluded_content}')
 
     def test_large_directory_structure_repartition(self):
         # Steps:
@@ -1885,7 +1894,8 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(read_file) for _ in range(5)] + [executor.submit(write_file) for _ in range(5)] # type: ignore
             concurrent.futures.wait(futures)
-        
+        if os.name == 'nt':
+            time.sleep(1)
         # Verify final content
         with open(os.path.join(self.mounted_dir, 'concurrent_test.bin'), 'r') as f:
             content = f.read()
