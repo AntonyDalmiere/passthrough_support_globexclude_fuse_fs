@@ -101,7 +101,7 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def open(self, path, flags) -> int:
         if os.name == 'nt':
-            flags = os.O_RDWR
+            flags = os.O_RDWR | os.O_BINARY
         right_path = self.get_right_path(path)
         if os.path.lexists(right_path):
             fh: FileHandle = FileHandle(right_path, os.open(right_path, flags))
@@ -414,7 +414,7 @@ class PassthroughFS(LoggingMixIn,Operations):
     def create(self, path, mode):
         right_path = self.get_right_path(path)
         self.makedirs(os.path.dirname(right_path), exist_ok=True)
-        fd = os.open(right_path, os.O_RDWR | os.O_CREAT, mode)
+        fd = os.open(right_path, os.O_RDWR | os.O_CREAT | os.O_BINARY, mode)
         new_fd_id = max(self.file_handles.keys()) + 1 if self.file_handles else 0
         self.file_handles[new_fd_id] = FileHandle(right_path, fd)
         return new_fd_id
