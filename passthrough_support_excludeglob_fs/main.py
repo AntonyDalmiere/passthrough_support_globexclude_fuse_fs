@@ -99,7 +99,9 @@ class PassthroughFS(LoggingMixIn,Operations):
             dirents.extend(os.listdir(cache_path))
         return set(dirents)
 
-    def open(self, path, flags):
+    def open(self, path, flags) -> int:
+        if os.name == 'nt':
+            flags = os.O_RDWR
         right_path = self.get_right_path(path)
         if os.path.lexists(right_path):
             fh: FileHandle = FileHandle(right_path, os.open(right_path, flags))
@@ -165,6 +167,8 @@ class PassthroughFS(LoggingMixIn,Operations):
             raise FuseOSError(errno.ENOENT)
 
     def chown(self, path, uid, gid):
+        if os.name == 'nt':
+            raise FuseOSError(errno.ENOTSUP)
         right_path = self.get_right_path(path)
         if os.path.lexists(right_path):
             return os.chown(right_path, uid, gid)
@@ -390,7 +394,8 @@ class PassthroughFS(LoggingMixIn,Operations):
                     full_path = os.path.join(self.root, current_path)
                     if os.path.lexists(full_path):
                         os.chmod(os.path.join(self.cache_dir, current_path), os.stat(full_path).st_mode)
-                        os.chown(os.path.join(self.cache_dir, current_path), os.stat(full_path).st_uid, os.stat(full_path).st_gid)
+                        if hasattr(os, 'chown'):
+                            os.chown(os.path.join(self.cache_dir, current_path), os.stat(full_path).st_uid, os.stat(full_path).st_gid)
                         # Also copy atime and ctime
                         os.utime(os.path.join(self.cache_dir, current_path), (os.stat(full_path).st_atime, os.stat(full_path).st_ctime)) 
                 else:  # current_location == 'full'
@@ -400,7 +405,8 @@ class PassthroughFS(LoggingMixIn,Operations):
                     cache_path = os.path.join(self.cache_dir, current_path)
                     if os.path.lexists(cache_path):
                         os.chmod(os.path.join(self.root, current_path), os.stat(cache_path).st_mode)
-                        os.chown(os.path.join(self.root, current_path), os.stat(cache_path).st_uid, os.stat(cache_path).st_gid)
+                        if hasattr(os, 'chown'):
+                            os.chown(os.path.join(self.root, current_path), os.stat(cache_path).st_uid, os.stat(cache_path).st_gid)
                         # Also copy atime and ctime
                         os.utime(os.path.join(self.root, current_path), (os.stat(cache_path).st_atime, os.stat(cache_path).st_ctime))
 
@@ -455,7 +461,7 @@ class PassthroughFS(LoggingMixIn,Operations):
             return False
         return glob_match(path, self.patterns)
 
-def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
+def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None,uid=-1,gid=-1):
     if patterns:
         print("Excluded patterns: ", patterns)
     
@@ -464,7 +470,7 @@ def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None):
     
     os.makedirs(name=cache_dir, exist_ok=True)
     print("Using cache directory:", cache_dir)
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint,foreground=True,nothreads=True,debug=True)
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint,foreground=True,nothreads=True,debug=True,uid=uid,gid=gid)
 def cli():
     parser = argparse.ArgumentParser(description="PassthroughFS")
     parser.add_argument("mountpoint", help="Mount point for the filesystem")
