@@ -1,4 +1,5 @@
 pytest
-pytest-progress
+pytest-sugar
+pytest-xdist
 wheel
 setuptools
