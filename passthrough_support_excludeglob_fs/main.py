@@ -152,11 +152,8 @@ class PassthroughFS(LoggingMixIn,Operations):
         #         total_written += written
         #use os.write instead
         os.lseek(self.file_handles[fh].real_fh, offset, os.SEEK_SET)
-        #Display file chmod
-        print(f'File read access: {oct(os.lstat(right_path).st_mode)}')
-        print(f'File write access: {os.access(right_path, os.W_OK)}')
         total_written = os.write(self.file_handles[fh].real_fh, buf)
-        os.fsync(self.file_handles[fh].real_fh)
+        os.fsync(self.file_handles[fh].real_fh)  
         return total_written
     
     def chmod(self, path, mode):
