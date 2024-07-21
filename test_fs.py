@@ -18,10 +18,12 @@ import string
 def determine_mountdir_based_on_os():
     if os.name == 'nt':
         drive_letters = [letter for letter in string.ascii_uppercase if letter not in ['C', 'E']]
-        #get the first letter of drive that is not used
-        for drive in drive_letters:
-            if not os.path.exists(f'{drive}:'):
-                return drive + ':'
+        #get a random letter that is not used
+        available_letters = [letter for letter in drive_letters if not os.path.exists(f'{letter}:')]
+        if available_letters:
+            return random.choice(available_letters) + ':'
+        else:
+            return None
     else:
         return tempfile.mkdtemp()
     
