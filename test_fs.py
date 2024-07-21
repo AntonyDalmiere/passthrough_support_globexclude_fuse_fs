@@ -583,13 +583,25 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
     def test_create_and_read_large_file2(self):
         large_file_path = os.path.join(self.mounted_dir, 'large_file.bin')
         max_counter = 100 * 1024 * 1024
-        content = ''.join(str(i) for i in range(max_counter))
+        chunk_size = 1024 * 1024  # 1 MB chunks
+
+        # Write in chunks
         with open(large_file_path, 'wb') as f:
-           
-            f.write(content.encode())
+            for i in range(0, max_counter, chunk_size):
+                chunk = ''.join(str(j) for j in range(i, min(i + chunk_size, max_counter)))
+                f.write(chunk.encode())
+
+        # Read in chunks and verify
+        total_size = 0
         with open(large_file_path, 'rb') as f:
-            content = f.read()
-        self.assertEqual(len(content), os.stat(large_file_path).st_size)
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                total_size += len(chunk)
+
+        self.assertEqual(total_size, os.stat(large_file_path).st_size)
+
 
 
     def test_concurrent_file_operations(self):
