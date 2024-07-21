@@ -941,8 +941,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
     def test_file_creation_time(self):
         file_path = os.path.join(self.mounted_dir, 'creation_time_test')
         before = time.time()
+        #wait 0.5 sec
+        time.sleep(0.5)
         with open(file_path, 'w') as f:
             f.write('test content')
+        #wait 0.5 sec
+        time.sleep(0.5)
         after = time.time()
         creation_time = os.path.getctime(file_path)
         self.assertGreaterEqual(creation_time, before)
