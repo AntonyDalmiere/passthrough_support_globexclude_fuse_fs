@@ -3,7 +3,7 @@
 import os
 import stat
 import sys
-from typing import Dict, Literal
+from typing import Any, Dict, Literal
 from refuse import _refactor
 _refactor.sys = sys # type: ignore
 from refuse.high import FUSE, FuseOSError, Operations,LoggingMixIn
@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 import shutil
 import traceback
-
+from str2type import str2type
 class FileHandle:
     def __init__(self, path, real_fh):
         self.path = path
@@ -28,9 +28,9 @@ class FileHandle:
 
 class PassthroughFS(LoggingMixIn,Operations):
     def __init__(self, root, patterns, cache_dir):
-        self.root = root
-        self.patterns = patterns
-        self.cache_dir = cache_dir
+        self.root:str = root
+        self.patterns: list[str] = patterns
+        self.cache_dir:str = cache_dir
         self.file_handles: Dict[int, FileHandle] = {} 
         # self.use_ns = True
 
@@ -461,34 +461,54 @@ class PassthroughFS(LoggingMixIn,Operations):
             return False
         return glob_match(path, self.patterns)
 
-def start_passthrough_fs(mountpoint, root, patterns=None, cache_dir=None,uid=-1,gid=-1):
+
+def default_uid_and_gid():
+    """
+    Returns the default UID and GID based on the operating system.
+
+    On Windows, it returns -1 for both UID and GID.
+    On Unix-like systems, it returns the current UID and GID.
+
+    Returns:
+        tuple: A tuple containing the default UID and GID.
+    """
+    if os.name == 'nt':
+        return -1, -1
+    return os.getuid(), os.getgid()
+
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=True):
+    if not root:
+        raise ValueError("Root directory must be specified")
     if patterns:
         print("Excluded patterns: ", patterns)
     
     if not cache_dir:
         cache_dir = os.path.join(user_cache_dir("PassthroughFS"), base64.b64encode(root.encode()).decode())
-    
+        print("Using default cache directory:", cache_dir)
     os.makedirs(name=cache_dir, exist_ok=True)
-    print("Using cache directory:", cache_dir)
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint,foreground=True,nothreads=True,debug=True,uid=uid,gid=gid)
+
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint,foreground=foreground,nothreads=nothreads,debug=debug,uid=uid,gid=gid)
+
+
 def cli():
     parser = argparse.ArgumentParser(description="PassthroughFS")
     parser.add_argument("mountpoint", help="Mount point for the filesystem")
     parser.add_argument("-o", "--options", help="Mount options")
     args = parser.parse_args()
 
-    options = {}
-    if args.options:
-        options = dict(opt.split('=') for opt in args.options.split(','))
+    options:dict[str,Any] = dict(opt.split('=') for opt in args.options.split(','))
+    #Pass each options value to the right type using str2type () except for patterns
+    for key in options:
+        if key != 'patterns':
+            options[key] = str2type(options[key])
 
-    root = options.get('root')
-    patterns = options.get('patterns', '').split(':') if 'patterns' in options else None
-    cache_dir = options.get('cache_dir')
-
-    if not root:
-        parser.error("Root directory must be specified in options")
-
-    start_passthrough_fs(args.mountpoint, root, patterns, cache_dir)
+    if 'patterns' in options:
+        #split patterns to list[str] based on the seprator ':' but support escaping the seprator
+        options['patterns'] = options['patterns'].split(':')
+    try:
+        start_passthrough_fs(args.mountpoint, **options)
+    except (TypeError,ValueError) as e:
+        parser.error(str(e))
 
 if __name__ == "__main__":
     cli()

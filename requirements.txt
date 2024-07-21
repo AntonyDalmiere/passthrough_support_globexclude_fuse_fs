@@ -2,3 +2,4 @@ refuse==0.0.4
 globmatch==2.0.0
 appdirs==1.4.4
 psutil==6.0.0
+str2type==0.4.1
