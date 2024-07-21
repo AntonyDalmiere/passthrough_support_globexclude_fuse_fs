@@ -82,6 +82,9 @@ class TestFSOperations(unittest.TestCase):
         #permission not supported on windows
         if os.name == 'nt':
             self.skipTest('File permissions are not supported on Windows')
+        #also ignore the test if user is root
+        if os.getuid() == 0:
+            self.skipTest('Cannot change file permissions as root')
         file_path = os.path.join(self.mounted_dir, 'readonlyfile')
         with open(file_path, 'w') as f:
             f.write('test data')
@@ -633,6 +636,9 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
     def test_file_permissions(self):
         if os.name == 'nt':
             self.skipTest('File permissions are not supported on Windows')
+        #skip if user is root
+        if os.getuid() == 0:
+            self.skipTest('Cannot change file permissions as root')
         file_path = os.path.join(self.mounted_dir, 'permissions_test.txt')
         with open(file_path, 'w') as f:
             f.write('test content')
@@ -1136,7 +1142,9 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
     def test_file_creation_in_readonly_directory(self):
         if os.name == 'nt':
             self.skipTest('Changing directory permissions is limited on Windows')
-        
+        #skip test if user is root
+        if os.getuid() == 0:
+            self.skipTest('Cannot change directory permissions as root')
         dir_path = os.path.join(self.mounted_dir, 'readonly_dir')
         os.mkdir(dir_path)
         os.chmod(dir_path, 0o555)  # Read and execute permissions only
