@@ -18,7 +18,10 @@ import logging
 from pathlib import Path
 import shutil
 import traceback
-from str2type import str2type
+import warnings
+with warnings.catch_warnings(action="ignore"):
+    from str2type import str2type
+
 class FileHandle:
     def __init__(self, path, real_fh):
         self.path = path
@@ -34,7 +37,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         self.file_handles: Dict[int, FileHandle] = {} 
         # self.use_ns = True
 
-    def get_right_path(self, path):
+    def get_right_path(self, path) -> str:
         full_path = self.get_full_path(path)
         cache_path = self.get_cache_path(path)
         is_excluded = self.is_excluded(path)
