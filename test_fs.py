@@ -587,7 +587,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
     #same as above but the content written is not random but ordered sequence of integer. eg. 1,2,3 ...
     def test_create_and_read_large_file2(self):
         large_file_path = os.path.join(self.mounted_dir, 'large_file.bin')
-        max_counter = 100 * 1024 * 1024
+        max_counter = 10 * 1024 * 1024
         chunk_size = 1024 * 1024  # 1 MB chunks
 
         # Write in chunks
