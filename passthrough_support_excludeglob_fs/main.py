@@ -479,12 +479,15 @@ def default_uid_and_gid():
         return -1, -1
     return os.getuid(), os.getgid()
 
-def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=True):
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=False):
     if not root:
         raise ValueError("Root directory must be specified")
     if patterns:
         print("Excluded patterns: ", patterns)
     
+    if debug:
+        print("Verbose mode enabled")
+        
     if not cache_dir:
         cache_dir = os.path.join(user_cache_dir("PassthroughFS"), base64.b64encode(root.encode()).decode())
         print("Using default cache directory:", cache_dir)
