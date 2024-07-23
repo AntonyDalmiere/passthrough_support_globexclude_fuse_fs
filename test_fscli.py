@@ -14,6 +14,7 @@ def virtual_env(tmp_path):
     subprocess.check_call(["python3", "-m", "venv", str(venv_dir)])
     return venv_dir
 
+@pytest.mark.xdist_group(name="cli")
 @pytest.mark.parametrize("complementary_option",['',',patterns=**/*.txt',',patterns=**/*.txt:**/exc/*'])
 def test_cli(virtual_env,complementary_option):
     """Test the CLI of the filesystem."""
@@ -98,7 +99,7 @@ def test_cli(virtual_env,complementary_option):
 
 
 #Same as above but will manually specify cache_dir to also cheack each time the presence of excluded dir in it
-
+@pytest.mark.xdist_group(name="cli")
 @pytest.mark.parametrize("complementary_option",['',',patterns=**/*.txt',',patterns=**/*.txt:**/exc/*',',patterns=**/*.txt:**/exc/*'])
 def test_cli_cache(virtual_env,complementary_option):
     """Test the CLI of the filesystem."""
