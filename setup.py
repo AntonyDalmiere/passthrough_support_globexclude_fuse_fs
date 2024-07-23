@@ -36,7 +36,7 @@ setup(
     name='passthrough_support_excludeglob_fs',
     version='1.0',
     packages=find_packages(),
-    description='A short description of your package',
+    description='A user-space filesystem that allows to exclude files from being shown in the filesystem using glob patterns',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     author='Antony Dalmiere',
