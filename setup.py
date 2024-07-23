@@ -34,7 +34,7 @@ class CustomInstall(install):
 
 setup(
     name='passthrough_support_excludeglob_fs',
-    version='0.1',
+    version='1.0',
     packages=find_packages(),
     description='A short description of your package',
     long_description=open('README.md').read(),
