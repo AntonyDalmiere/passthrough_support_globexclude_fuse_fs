@@ -34,7 +34,7 @@ PassthroughSupportExcludeGlobFS is a user-space filesystem (FUSE) written in Pyt
 ### Installing PassthroughSupportExcludeGlobFS
 
 ```bash
-pip install PassthroughSupportExcludeGlobFS
+pip install passthrough-support-excludeglob
 ```
 
 ## Usage
