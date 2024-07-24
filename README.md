@@ -90,7 +90,7 @@ Contributions are welcome! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) fil
 
 ## License
 
-PassthroughSupportExcludeGlobFS is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+PassthroughSupportExcludeGlobFS is licensed under the CC-BY-NC-ND License. See the [LICENCE](LICENCE) file for details.
 
 
 
