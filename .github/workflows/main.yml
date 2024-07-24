@@ -61,6 +61,11 @@ jobs:
         if: steps.check_bump.outputs.version_bumped == 'true'
         run: git push origin HEAD:main
 
+      - name: Get commit SHA
+        id: get_commit_sha
+        run: echo "::set-output name=sha::$(git rev-parse HEAD)"
+
+
   build-and-publish:
     needs: bump-version
     if: needs.bump-version.outputs.version_bumped == 'true'
@@ -68,6 +73,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          ref: ${{ needs.bump-version.outputs.sha }}
+
 
       - name: Set up Python
         uses: actions/setup-python@v2
