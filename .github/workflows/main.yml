@@ -21,7 +21,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install dependencies
-        run: pip install bump2version setuptools wheel twine
+        run: pip install bump2version
 
       - name: Get current version
         id: get_version
@@ -31,9 +31,9 @@ jobs:
         id: bump_version
         run: |
           if git log -1 --pretty=%B | grep -q 'bump minor'; then
-           bump2version --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' --serialize '{major}.{minor}' minor setup.py
+           bump2version --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' --serialize '{major}.{minor}' --commit minor setup.py
           elif git log -1 --pretty=%B | grep -q 'bump major'; then
-           bump2version --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' --serialize '{major}.{minor}' major setup.py
+           bump2version --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' --serialize '{major}.{minor}' --commit major setup.py
           else
            echo "No version bump needed"
            echo "::set-output name=new_version::${{ steps.get_version.outputs.current_version }}"
@@ -71,6 +71,9 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: "3.x"
+      - name: Install setuptools, wheel, twine
+        run: |
+          pip install setuptools wheel twine
 
       - name: Build package
         run: |
