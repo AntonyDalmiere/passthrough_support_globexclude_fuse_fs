@@ -21,7 +21,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install dependencies
-        run: pip install bump2version
+        run: pip install bump2version setuptools
 
       - name: Get current version
         id: get_version
