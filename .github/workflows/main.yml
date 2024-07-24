@@ -50,6 +50,7 @@ jobs:
             echo "::set-output name=version_bumped::true"
           else
             echo "::set-output name=version_bumped::false"
+          fi
 
       - name: Push changes
         if: steps.check_bump.outputs.version_bumped == 'true'
