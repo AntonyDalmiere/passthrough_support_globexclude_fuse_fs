@@ -506,7 +506,7 @@ def cli():
     #Pass each options value to the right type using str2type () except for patterns
     for key in options:
         if key != 'patterns':
-            options[key] = str2type(options[key])
+            options[key] = str2type(options[key],decode_escape=False)
 
     if 'patterns' in options:
         #split patterns to list[str] based on the seprator ':' but support escaping the seprator
