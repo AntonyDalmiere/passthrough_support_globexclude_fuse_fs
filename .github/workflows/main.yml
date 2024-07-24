@@ -31,9 +31,9 @@ jobs:
         id: bump_version
         run: |
           if git log -1 --pretty=%B | grep -q 'bump minor'; then
-           bump2version minor --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' setup.py
+           bump2version --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' minor setup.py
           elif git log -1 --pretty=%B | grep -q 'bump major'; then
-           bump2version major --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' setup.py
+           bump2version --current-version ${{ steps.get_version.outputs.current_version }} --parse '(?P<major>\d+)\.(?P<minor>\d+)' major setup.py
           else
            echo "No version bump needed"
            echo "::set-output name=new_version::${{ steps.get_version.outputs.current_version }}"
