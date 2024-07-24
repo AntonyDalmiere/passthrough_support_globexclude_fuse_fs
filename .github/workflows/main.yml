@@ -74,7 +74,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.bump-version.outputs.sha }}
+          ref: main
 
 
       - name: Set up Python
