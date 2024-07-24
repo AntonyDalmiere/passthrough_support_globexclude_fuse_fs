@@ -8,6 +8,9 @@ on:
 jobs:
   bump-version:
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.set_output.outputs.new_version }}
+      version_bumped: ${{ steps.check_bump.outputs.version_bumped }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -17,23 +20,38 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install bump2version
-        run: pip install bump2version
+      - name: Install dependencies
+        run: pip install bump2version setuptools wheel twine
+
+      - name: Get current version
+        id: get_version
+        run: echo "::set-output name=current_version::$(python setup.py --version)"
 
       - name: Bump version
         id: bump_version
         run: |
           if git log -1 --pretty=%B | grep -q 'bump minor'; then
-            bump2version minor --current-version $(python setup.py --version) setup.py
+            bump2version minor --current-version ${{ steps.get_version.outputs.current_version }} setup.py
           elif git log -1 --pretty=%B | grep -q 'bump major'; then
-            bump2version major --current-version $(python setup.py --version) setup.py
+            bump2version major --current-version ${{ steps.get_version.outputs.current_version }} setup.py
           else
             echo "No version bump needed"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            echo "::set-output name=new_version::${{ steps.get_version.outputs.current_version }}"
+
+      - name: Set new version output
+        id: set_output
+        run: echo "::set-output name=new_version::$(python setup.py --version)"
+
+      - name: Check if version bumped
+        id: check_bump
+        run: |
+          if [ "${{ steps.get_version.outputs.current_version }}" != "$(python setup.py --version)" ]; then
+            echo "::set-output name=version_bumped::true"
+          else
+            echo "::set-output name=version_bumped::false"
 
       - name: Push changes
-        if: steps.bump_version.outputs.version != ''
+        if: steps.check_bump.outputs.version_bumped == 'true'
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
@@ -41,7 +59,7 @@ jobs:
 
   build-and-publish:
     needs: bump-version
-    if: steps.bump_version.outputs.version != ''
+    if: needs.bump-version.outputs.version_bumped == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -52,10 +70,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install build tools
-        run: |
-          pip install setuptools wheel twine
-
       - name: Build package
         run: |
           python setup.py sdist bdist_wheel
@@ -64,8 +78,8 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: v${{ steps.bump_version.outputs.version }}
-          release_name: Release ${{ steps.bump_version.outputs.version }}
+          tag_name: v${{ needs.bump-version.outputs.new_version }}
+          release_name: Release ${{ needs.bump-version.outputs.new_version }}
           draft: false
           prerelease: false
         env:
