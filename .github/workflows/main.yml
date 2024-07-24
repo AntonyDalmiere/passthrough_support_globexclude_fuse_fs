@@ -37,6 +37,7 @@ jobs:
           else
             echo "No version bump needed"
             echo "::set-output name=new_version::${{ steps.get_version.outputs.current_version }}"
+          fi
 
       - name: Set new version output
         id: set_output
