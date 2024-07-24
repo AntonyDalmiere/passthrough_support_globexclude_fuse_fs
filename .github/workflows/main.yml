@@ -109,6 +109,8 @@ jobs:
           asset_name: passthrough_support_excludeglob_fs-${{ needs.bump-version.outputs.new_version }}.whl
           asset_content_type: application/gzip
           asset_label: passthrough_support_excludeglob_fs-${{ needs.bump-version.outputs.new_version }}.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
       - name: Publish release
