@@ -24,7 +24,7 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          
+
       - name: Install dependencies
         run: pip install bump2version setuptools
 
@@ -87,10 +87,34 @@ jobs:
         with:
           tag_name: v${{ needs.bump-version.outputs.new_version }}
           release_name: Release ${{ needs.bump-version.outputs.new_version }}
-          draft: false
+          draft: true
           prerelease: false
+          body: |
+            To install : 
+            ```bash
+            pip install passthrough_support_excludeglob_fs-${{ needs.bump-version.outputs.new_version }}.whl
+            ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name : Upload release asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist/*
+          asset_name: passthrough_support_excludeglob_fs-${{ needs.bump-version.outputs.new_version }}.wlh
+          asset_content_type: application/gzip
+          asset_label: passthrough_support_excludeglob_fs-${{ needs.bump-version.outputs.new_version }}.whl
+
+
+
+      - name: Publish release
+        uses: eregon/publish-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          release_id: ${{ steps.create_release.outputs.id }}
+
 
       - name: Upload to PyPI
         run: |
