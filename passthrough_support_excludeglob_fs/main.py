@@ -502,6 +502,9 @@ def cli():
     parser.add_argument("-o", "--options", help="Mount options")
     args = parser.parse_args()
 
+    if args.options is None:
+        raise ValueError("At least -o root must be specified.")
+    
     options:dict[str,Any] = dict(opt.split('=') for opt in args.options.split(','))
     #Pass each options value to the right type using str2type () except for patterns
     for key in options:
