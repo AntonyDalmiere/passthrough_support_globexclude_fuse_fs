@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import stat
 import sys
-from typing import Any, Dict, Literal
+from typing import Any, Dict, List, Literal
 from refuse import _refactor
 _refactor.sys = sys # type: ignore
 from refuse.high import FUSE, FuseOSError, Operations,LoggingMixIn
@@ -495,8 +496,19 @@ def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None,
 
     fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint,foreground=foreground,nothreads=nothreads,debug=debug,uid=uid,gid=gid)
 
+def parse_options(options: str) -> Dict[str, str]:
+    """Parse options string with escaping"""
+    options_dict: Dict[str, str] = {}
+    for opt in re.split(r'(?<!\\),', options):
+        key, value = re.split(r'(?<!\\)=', opt, maxsplit=1)
+        options_dict[key] = value.replace('\,', ',').replace('\=', '=').replace('\\ ', ' ')
+    return options_dict
 
-def cli():
+def split_escaped(separator: str, value: str) -> List[str]:
+    """Split a string on a separator, handling escaping"""
+    return re.split(rf'(?<!\\){separator}', value)
+
+def cli() -> None:
     parser = argparse.ArgumentParser(description="PassthroughFS")
     parser.add_argument("mountpoint", help="Mount point for the filesystem")
     parser.add_argument("-o", "--options", help="Mount options")
@@ -505,18 +517,19 @@ def cli():
     if args.options is None:
         raise ValueError("At least -o root must be specified.")
     
-    options:dict[str,Any] = dict(opt.split('=') for opt in args.options.split(','))
-    #Pass each options value to the right type using str2type () except for patterns
+    options: Dict[str, Any] = parse_options(args.options)
+    # Pass each options value to the right type using str2type () except for patterns
     for key in options:
         if key != 'patterns':
-            options[key] = str2type(options[key],decode_escape=False)
+            options[key] = str2type(options[key].replace('\:', ':').replace('\,', ',').replace('\=', '=').replace('\\ ', ' '), decode_escape=False)
 
     if 'patterns' in options:
-        #split patterns to list[str] based on the seprator ':' but support escaping the seprator
-        options['patterns'] = options['patterns'].split(':')
+        # Split patterns to list[str] based on the separator ':' but support escaping the separator
+        options['patterns'] = split_escaped(':', options['patterns'].replace('\\ ', ' '))
+
     try:
         start_passthrough_fs(args.mountpoint, **options)
-    except (TypeError,ValueError) as e:
+    except (TypeError, ValueError) as e:
         parser.error(str(e))
 
 if __name__ == "__main__":
