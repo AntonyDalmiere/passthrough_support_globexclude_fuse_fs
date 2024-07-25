@@ -1,7 +1,8 @@
 # PassthroughSupportExcludeGlobFS: A Union Filesystem with Glob Pattern Exclusion
 
+![Pepy Total Downlods](https://img.shields.io/pepy/dt/passthrough-support-excludeglob-fs)
+![PyPI - Version](https://img.shields.io/pypi/v/passthrough-support-excludeglob-fs)
 [![CC BY-NC-ND 4.0](https://img.shields.io/badge/License-CC%20BY--NC--ND%204.0-lightgrey.svg)](http://creativecommons.org/licenses/by-nc-nd/4.0/)
-
 
 PassthroughSupportExcludeGlobFS is a user-space filesystem (FUSE) written in Python that provides a union mount functionality with the added power of glob pattern exclusion. It allows you to seamlessly merge the contents of two directories, while selectively excluding files or folders based on flexible glob patterns.
 
