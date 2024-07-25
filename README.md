@@ -9,8 +9,7 @@ PassthroughSupportExcludeGlobFS is a user-space filesystem (FUSE) written in Pyt
 ## Key Features
 
 - **Union Mount:** Combine the contents of two directories into a single, unified view.
-- **Glob Pattern Exclusion:** Fine-grained control over which files and directories are included or excluded from the upper or lower directory.
-- **Performance:** Designed for efficiency, minimizing overhead and maximizing throughput.
+- **Glob Pattern Exclusion:** Fine-grained control over which files and directories are included or excluded from two directories.
 - **Cross-Platform:** Works seamlessly on Linux, macOS, and Windows.
 - **Easy to Use:** Simple CLI interface and Python API for integration into your projects.
 
@@ -35,7 +34,7 @@ PassthroughSupportExcludeGlobFS is a user-space filesystem (FUSE) written in Pyt
 ### Installing PassthroughSupportExcludeGlobFS
 
 ```bash
-pip install passthrough-support-excludeglob
+pip install passthrough-support-excludeglob-fs
 ```
 
 ## Usage
@@ -48,9 +47,9 @@ passthrough_support_excludeglob_fs <mountpoint> -o root=<root_directory>,[option
 
 **Options:**
 
-- `root=<root_directory>`: The path to the lower directory (required).
-- `patterns=<pattern1:pattern2:patternN>`: A colon-separated list of glob patterns to exclude from root. All files and directories matching these patterns will be stored in the cache directory (default none).
-- `cache_dir=<cache_directory>`: The path to the upper directory (defaults to a cache directory within the user's cache folder).
+- `root=<root_directory>`: The path to the lower directory (required). Use `\` to escape `,` and `=`.
+- `patterns=<pattern1:pattern2:patternN>`: A colon-separated list of glob patterns to exclude from root. All files and directories matching these patterns will be stored in the cache directory (default none). Use `\` to escape `:`.
+- `cache_dir=<cache_directory>`: The path to the upper directory (defaults to a cache directory within the user's cache folder). Use `\` to escape `,` and `=`.
 - `uid=<user_id>`: The user ID to own the mounted filesystem (defaults to the current user).
 - `gid=<group_id>`: The group ID to own the mounted filesystem (defaults to the current group).
 - `foreground=<True|False>`: Run PassthroughSupportExcludeGlobFS in the foreground (default true).
@@ -119,7 +118,34 @@ PassthroughSupportExcludeGlobFS is licensed under the CC-BY-NC-ND License. See t
 
 **Q: Is PassthroughSupportExcludeGlobFS compatible with symbolic links?**
 
-**A:** Yes, PassthroughSupportExcludeGlobFS supports symbolic links. However, note that symbolic links to excluded files will be resolved within the cache directory. However some behavior may be unexpected with relative target links. Also note (`mklink`) it is untested on Windows.
+**A:** Yes, PassthroughSupportExcludeGlobFS supports symbolic links. However some behavior may be unexpected with relative target links. Note `mklink` is untested on Windows.
+
+
+**Q: Can I use PassthroughSupportExcludeGlobFS in a production environment?**
+
+**A:** PassthroughSupportExcludeGlobFS is intended for testing and development purposes. While it is stable, it may not be suitable for production use.
+
+**Q: Why the CLI options are weird?**
+
+**A:** The CLI options are designed to be consistent with the mount options. This allows you to use PassthroughSupportExcludeGlobFS with existing FUSE tools and libraries.
+
+**Q: Why it is slow to access files?**
+
+**A:** The first access to a misplaced file will trigger a move operation to the right directory. This operation can be slow for large files or directories. However it should be fast for subsequent accesses.
+
+**Q: What is the default cache directory?**
+
+**A:** The default cache directory is a subdirectory within the user's cache folder. On Linux and macOS, this is typically `~/.cache/passthrough-support-excludeglob-fs`. On Windows, it is `%LOCALAPPDATA%\passthrough-support-excludeglob-fs`. The name of the subdirectory is then the base64 encoded root directory path.
+
+For example, if the root directory is `/home/user/doc`, the cache directory will be `~/.cache/passthrough-support-excludeglob-fs/L2hvbWUvdXNlci9kb2M=`.
+
+**Q: what are common bugs?**
+
+**A:** Common know bugs:
+- Metadata time (`ctime`,`atime`,`mtime`) are sometime updated even if the file is not accessed or modified. It can happen during the first access of a misplaced file.
+- The filesystem is not thread safe. It is recommended to keep the `nothreads` option to `True`.
+- Symbolic links are not tested on Windows and can be buggy.
+
 
 **Q: How can I contribute to PassthroughSupportExcludeGlobFS?**
 
