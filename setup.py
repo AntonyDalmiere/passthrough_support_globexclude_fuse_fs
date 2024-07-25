@@ -43,13 +43,18 @@ setup(
     author_email='zbkk9jrxo@mozmail.com',
     url='https://github.com/AntonyDalmiere/passthrough_support_globexclude_fuse_fs',
     classifiers=[
-        'Development Status :: 3 - Alpha',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
+        'Development Status :: 4 - Beta',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Environment :: Console',
+        'Intended Audience :: System Administrators',
+        'Operating System :: MacOS',
+        'Operating System :: POSIX',
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: Unix',
+        'Topic :: System :: Filesystems'
     ],
     keywords='fuse, filesystem, passthrough, excludeglob',
     install_requires=requirements,
@@ -59,4 +64,5 @@ setup(
             'passthrough_support_excludeglob_fs=passthrough_support_excludeglob_fs:cli',
         ],
     },
+    license='CC BY-NC-NDA 4.0',
 )
