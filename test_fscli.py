@@ -245,3 +245,208 @@ def test_cli_debug(virtual_env, debug):
         assert b'Verbose mode enabled' in out
     else:
         assert b'Verbose mode enabled' not in out
+
+@pytest.mark.xdist_group(name="cli")
+def test_cli_escaping_patterns(virtual_env):
+    """Test the CLI of the filesystem with escaping."""
+
+    # Install the filesystem package
+    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
+
+    # Create temporary directories for root and mountpoint
+    root_dir = tempfile.mkdtemp()
+    mountpoint_dir = tempfile.mkdtemp()
+    cache_dir = tempfile.mkdtemp()
+
+    # Run the CLI command in a separate process with escaping
+    cli_command = [
+        str(virtual_env / "bin" / "passthrough_support_excludeglob_fs"),
+        mountpoint_dir,
+        "-o",
+        f"root={root_dir},cache_dir={cache_dir},patterns=**/\\,test\\=file.txt:**/\\ exc\\ dir/*"
+    ]
+    process = subprocess.Popen(cli_command)
+
+    # Wait for the filesystem to mount
+    time.sleep(2)
+
+    # Verify the filesystem is mounted
+    try:
+        os.listdir(mountpoint_dir)
+    except OSError:
+        pytest.fail("Filesystem failed to mount")
+
+    time.sleep(5)
+
+    # Create file in the underlying filesystem
+    with open(os.path.join(root_dir, ',test=file.txt'), 'w') as f:
+        f.write('test')
+
+    # Verify the file is accessible in the mounted filesystem
+    assert os.path.exists(os.path.join(mountpoint_dir, ',test=file.txt'))
+
+    # Verify the file is in the cache directory
+    assert os.path.exists(os.path.join(cache_dir, ',test=file.txt'))
+    # Verify the file is not in the root directory
+    assert not os.path.exists(os.path.join(root_dir, ',test=file.txt'))
+    
+    # Create dir and file in it
+    os.mkdir(os.path.join(mountpoint_dir, ' exc dir'))
+    with open(os.path.join(mountpoint_dir, ' exc dir', 'test'), 'w') as f:
+        f.write('test')
+    assert os.path.exists(os.path.join(mountpoint_dir, ' exc dir', 'test'))
+
+    # Verify the file is in the cache directory
+    assert os.path.exists(os.path.join(cache_dir, ' exc dir', 'test'))
+
+    # Verify the file is not in the root directory
+    assert not os.path.exists(os.path.join(root_dir, ' exc dir', 'test'))
+
+    # Unmount the filesystem
+    if os.name == 'nt':
+        # subprocess.check_call(["fusermount", "-u", mountpoint_dir])  # Replace with Windows equivalent
+        pass
+    else:
+        subprocess.check_call(["fusermount", "-u", mountpoint_dir])
+
+    # Clean up
+    process.terminate()
+    shutil.rmtree(root_dir)
+    shutil.rmtree(mountpoint_dir)
+    shutil.rmtree(cache_dir)
+
+@pytest.mark.xdist_group(name="cli")
+def test_cli_escaping_mountdir(virtual_env):
+    """Test the CLI of the filesystem with escaping in mountdir."""
+
+    # Install the filesystem package
+    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
+
+    # Create temporary directories for root and mountpoint
+    root_dir = tempfile.mkdtemp()
+    mountpoint_dir = tempfile.mkdtemp(prefix="mount,dir=")
+
+    # Run the CLI command in a separate process with escaping
+    cli_command = [
+        str(virtual_env / "bin" / "passthrough_support_excludeglob_fs"),
+        mountpoint_dir,
+        "-o",
+        f"root={root_dir}"
+    ]
+    process = subprocess.Popen(cli_command)
+
+    # Wait for the filesystem to mount
+    time.sleep(2)
+
+    # Verify the filesystem is mounted
+    try:
+        os.listdir(mountpoint_dir)
+    except OSError:
+        pytest.fail("Filesystem failed to mount")
+
+    time.sleep(5)
+
+    # Unmount the filesystem
+    if os.name == 'nt':
+        # subprocess.check_call(["fusermount", "-u", mountpoint_dir])  # Replace with Windows equivalent
+        pass
+    else:
+        subprocess.check_call(["fusermount", "-u", mountpoint_dir])
+
+    # Clean up
+    process.terminate()
+    shutil.rmtree(root_dir)
+    shutil.rmtree(mountpoint_dir)
+
+@pytest.mark.xdist_group(name="cli")
+def test_cli_escaping_rootdir(virtual_env):
+    """Test the CLI of the filesystem with escaping in rootdir."""
+
+    # Install the filesystem package
+    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
+
+    # Create temporary directories for root and mountpoint
+    root_dir = tempfile.mkdtemp(prefix="root\\,dir\\=")
+    mountpoint_dir = tempfile.mkdtemp()
+
+    print(f'root_dir: {root_dir}')
+
+    # Run the CLI command in a separate process with escaping
+    cli_command = [
+        str(virtual_env / "bin" / "passthrough_support_excludeglob_fs"),
+        mountpoint_dir,
+        "-o",
+        f"root={root_dir}"
+    ]
+    process = subprocess.Popen(cli_command)
+
+    # Wait for the filesystem to mount
+    time.sleep(2)
+
+    # Verify the filesystem is mounted
+    try:
+        os.listdir(mountpoint_dir)
+    except OSError:
+        pytest.fail("Filesystem failed to mount")
+
+    time.sleep(5)
+
+    # Unmount the filesystem
+    if os.name == 'nt':
+        # subprocess.check_call(["fusermount", "-u", mountpoint_dir])  # Replace with Windows equivalent
+        pass
+    else:
+        subprocess.check_call(["fusermount", "-u", mountpoint_dir])
+
+    # Clean up
+    process.terminate()
+    shutil.rmtree(root_dir)
+    shutil.rmtree(mountpoint_dir)
+
+@pytest.mark.xdist_group(name="cli")
+def test_cli_escaping_cachedir(virtual_env):
+    """Test the CLI of the filesystem with escaping in cachedir."""
+
+    # Install the filesystem package
+    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
+
+    # Create temporary directories for root and mountpoint
+    root_dir = tempfile.mkdtemp()
+    mountpoint_dir = tempfile.mkdtemp()
+    cache_dir = tempfile.mkdtemp(prefix="cache\\,dir\\=")
+
+    print(f'cache_dir: {cache_dir}')
+
+
+    # Run the CLI command in a separate process with escaping
+    cli_command = [
+        str(virtual_env / "bin" / "passthrough_support_excludeglob_fs"),
+        mountpoint_dir,
+        "-o",
+        f"root={root_dir},cache_dir={cache_dir}"
+    ]
+    process = subprocess.Popen(cli_command)
+
+    # Wait for the filesystem to mount
+    time.sleep(2)
+
+    # Verify the filesystem is mounted
+    try:
+        os.listdir(mountpoint_dir)
+    except OSError:
+        pytest.fail("Filesystem failed to mount")
+
+    time.sleep(5)
+
+    # Unmount the filesystem
+    if os.name == 'nt':
+        # subprocess.check_call(["fusermount", "-u", mountpoint_dir])  # Replace with Windows equivalent
+        pass
+    else:
+        subprocess.check_call(["fusermount", "-u", mountpoint_dir])
+
+    # Clean up
+    process.terminate()
+    shutil.rmtree(root_dir)
+    shutil.rmtree(mountpoint_dir)
+    shutil.rmtree(cache_dir)
