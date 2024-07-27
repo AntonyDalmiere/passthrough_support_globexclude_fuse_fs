@@ -136,3 +136,4 @@ install_manifest.txt
 *.cmake.in
 
 .vscode/
+.aider.*
