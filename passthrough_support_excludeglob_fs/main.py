@@ -480,7 +480,7 @@ def default_uid_and_gid():
         return -1, -1
     return os.getuid(), os.getgid()
 
-def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=False):
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=False, overwrite_rename_dest:Literal['Auto', True, False]='Auto'):
     if not root:
         raise ValueError("Root directory must be specified")
     if patterns:
@@ -520,12 +520,17 @@ def cli() -> None:
     options: Dict[str, Any] = parse_options(args.options)
     # Pass each options value to the right type using str2type () except for patterns
     for key in options:
-        if key != 'patterns':
+        if key != 'patterns' and key != 'overwrite_rename_dest':
             options[key] = str2type(options[key].replace('\:', ':').replace('\,', ',').replace('\=', '=').replace('\\ ', ' '), decode_escape=False)
 
     if 'patterns' in options:
         # Split patterns to list[str] based on the separator ':' but support escaping the separator
         options['patterns'] = split_escaped(':', options['patterns'].replace('\\ ', ' '))
+
+    if 'overwrite_rename_dest' in options:
+        if options['overwrite_rename_dest'] not in ['Auto', 'True', 'False']:
+            raise ValueError("overwrite_rename_dest must be one of Auto, True, False")
+        options['overwrite_rename_dest'] = {'Auto': 'Auto', 'True': True, 'False': False}[options['overwrite_rename_dest']]
 
     try:
         start_passthrough_fs(args.mountpoint, **options)
