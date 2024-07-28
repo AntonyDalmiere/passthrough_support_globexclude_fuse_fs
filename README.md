@@ -10,7 +10,7 @@ PassthroughSupportExcludeGlobFS is a user-space filesystem (FUSE) written in Pyt
 
 - **Union Mount:** Combine the contents of two directories into a single, unified view.
 - **Glob Pattern Exclusion:** Fine-grained control over which files and directories are included or excluded from two directories.
-- **Cross-Platform:** Works seamlessly on Linux, macOS, and Windows.
+- **Cross-Platform:** Works seamlessly on Linux, macOS (in theory but untested), and Windows.
 - **Easy to Use:** Simple CLI interface and Python API for integration into your projects.
 
 ## Use Cases
@@ -75,7 +75,7 @@ start_passthrough_fs(mountpoint='/mnt/union', root='/path/to/lower', patterns=['
 
 ## Glob Pattern Syntax
 
-PassthroughSupportExcludeGlobFS uses the `globmatch` library for glob pattern matching. The following wildcards are supported:
+PassthroughSupportExcludeGlobFS uses the [globmatch](https://pypi.org/project/globmatch/2.0.0/) library for glob pattern matching. The following wildcards are supported:
 
 - `*`: Matches any number of characters (including zero).
 - `?`: Matches any single character.
@@ -139,12 +139,13 @@ PassthroughSupportExcludeGlobFS is licensed under the CC-BY-NC-ND License. See t
 
 For example, if the root directory is `/home/user/doc`, the cache directory will be `~/.cache/passthrough-support-excludeglob-fs/L2hvbWUvdXNlci9kb2M=`.
 
-**Q: what are common bugs?**
+**Q: What are common bugs?**
 
 **A:** Common know bugs:
 - Metadata time (`ctime`,`atime`,`mtime`) are sometime updated even if the file is not accessed or modified. It can happen during the first access of a misplaced file.
 - The filesystem is not thread safe. It is recommended to keep the `nothreads` option to `True`.
 - Symbolic links are not tested on Windows and can be buggy.
+- Exclude glob patterns must never be relative to root directory. It is recommended to always prefix with `**/`.
 
 
 **Q: How can I contribute to PassthroughSupportExcludeGlobFS?**
