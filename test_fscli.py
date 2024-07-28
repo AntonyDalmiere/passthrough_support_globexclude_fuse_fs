@@ -12,15 +12,13 @@ def virtual_env(tmp_path):
     """Create a virtual environment for testing."""
     venv_dir = tmp_path / "venv"
     subprocess.check_call(["python3", "-m", "venv", str(venv_dir)])
+    subprocess.check_call([str(venv_dir / "bin" / "pip"), "install", "."])
     return venv_dir
 
 @pytest.mark.xdist_group(name="cli")
 @pytest.mark.parametrize("complementary_option",['',',patterns=**/*.txt',',patterns=**/*.txt:**/exc/*'])
 def test_cli(virtual_env,complementary_option):
     """Test the CLI of the filesystem."""
-
-    # Install the filesystem package
-    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
 
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp()
@@ -103,9 +101,6 @@ def test_cli(virtual_env,complementary_option):
 @pytest.mark.parametrize("complementary_option",['',',patterns=**/*.txt',',patterns=**/*.txt:**/exc/*',',patterns=**/*.txt:**/exc/*'])
 def test_cli_cache(virtual_env,complementary_option):
     """Test the CLI of the filesystem."""
-
-    # Install the filesystem package
-    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
 
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp()
@@ -190,9 +185,6 @@ def test_cli_cache(virtual_env,complementary_option):
 def test_cli_debug(virtual_env, debug):
     """Test the CLI of the filesystem."""
 
-    # Install the filesystem package
-    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
-
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp()
     mountpoint_dir = tempfile.mkdtemp()
@@ -249,9 +241,6 @@ def test_cli_debug(virtual_env, debug):
 @pytest.mark.xdist_group(name="cli")
 def test_cli_escaping_patterns(virtual_env):
     """Test the CLI of the filesystem with escaping."""
-
-    # Install the filesystem package
-    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
 
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp()
@@ -319,9 +308,6 @@ def test_cli_escaping_patterns(virtual_env):
 def test_cli_escaping_mountdir(virtual_env):
     """Test the CLI of the filesystem with escaping in mountdir."""
 
-    # Install the filesystem package
-    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
-
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp()
     mountpoint_dir = tempfile.mkdtemp(prefix="mount,dir=")
@@ -361,9 +347,6 @@ def test_cli_escaping_mountdir(virtual_env):
 @pytest.mark.xdist_group(name="cli")
 def test_cli_escaping_rootdir(virtual_env):
     """Test the CLI of the filesystem with escaping in rootdir."""
-
-    # Install the filesystem package
-    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
 
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp(prefix="root\\,dir\\=")
@@ -406,9 +389,6 @@ def test_cli_escaping_rootdir(virtual_env):
 @pytest.mark.xdist_group(name="cli")
 def test_cli_escaping_cachedir(virtual_env):
     """Test the CLI of the filesystem with escaping in cachedir."""
-
-    # Install the filesystem package
-    subprocess.check_call([str(virtual_env / "bin" / "pip"), "install", "."])
 
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp()
