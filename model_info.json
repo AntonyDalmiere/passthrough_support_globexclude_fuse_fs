@@ -1,8 +1,0 @@
-{
-    "openrouter/meta-llama/llama-3.1-405b-instruct": {
-        "max_tokens": 128000,
-        "litellm_provider": "openrouter",
-        "mode": "chat",
-        "source": "https://openrouter.io/pricing"
-    }
-}
