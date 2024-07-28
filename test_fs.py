@@ -197,7 +197,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.mounted_dir = determine_mountdir_based_on_os()
         print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
         # Create a new process to launch the function start_passthrough_fs
-        self.p = multiprocessing.Process(target=start_passthrough_fs, kwargs={'mountpoint': self.mounted_dir, 'root': self.temp_dir, 'patterns': ['**/*.txt','**/*.txt/*','**/*.config'], 'cache_dir': self.cache_dir,'debug':True})
+        self.p = multiprocessing.Process(target=start_passthrough_fs, kwargs={'mountpoint': self.mounted_dir, 'root': self.temp_dir, 'patterns': ['**/*.txt','**/*.txt/*','**/*.config'], 'cache_dir': self.cache_dir,'debug':False})
         self.p.start()
         time.sleep(5)
         #cmod mounted dir, temp dir and cache dir to the user that launch the test
@@ -2185,7 +2185,42 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
             #Ensure git repo is initialized
             self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
+            
+    def test_end_to_end_git_clone(self):
+        if os.name == 'nt':
+            self.skipTest("end to end git not supported on Windows")
+        else:
+            env = os.environ.copy()
+            env['GIT_TRACE'] = '1'
+            p = subprocess.run(['git', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            #Ensure git repo is initialized
+            self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
 
+    def test_end_to_end_git_clone_and_create_file_then_commit(self):
+        if os.name == 'nt':
+            self.skipTest("end to end git not supported on Windows")
+        else:
+            env = os.environ.copy()
+            env['GIT_TRACE'] = '1'
+            p = subprocess.run(['git', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            #Ensure git repo is initialized
+            self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
+            #Create a file in the repo
+            file_path = os.path.join(self.mounted_dir,'test','test.txt')
+            with open(file_path, 'w') as f:
+                f.write('test content')
+            #Commit the file
+            p = subprocess.run(['git', 'add', 'test.txt'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            p = subprocess.run(['git', 'commit', '-m', '"test commit"'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            #Ensure the file is committed by retieving the name of the last commit
+            p = subprocess.run(['git', 'log', '--pretty=format:%s', '-n', '1'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            commit_message = p.stdout.decode('utf-8').strip()
+            self.assertEqual(commit_message, '"test commit"')
     def tearDown(self):
         self.p.kill()
         #unmount fs
