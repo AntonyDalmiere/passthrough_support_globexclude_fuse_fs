@@ -73,12 +73,18 @@ class PassthroughFS(LoggingMixIn,Operations):
             return cache_path if is_excluded else full_path
         
     # Filesystem methods
-    def access(self, path, mode):
+    def _access(self, path, mode):
         right_path = self.get_right_path(path)
         if not os.path.lexists(right_path):
             raise FuseOSError(errno.ENOENT)
-        return os.access(right_path, mode)
+        result = os.access(right_path, mode,follow_symlinks=False)
+        return result
 
+    def access(self, path, amode):
+        if self._access(path, amode):
+            return 0
+        else:
+            raise FuseOSError(errno.EACCES)
     def getattr(self, path, fh=None):
         right_path = self.get_right_path(path)
         if not os.path.lexists(right_path):
@@ -121,7 +127,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         return exposed_fh
     
     def read(self, path, length, offset, fh):
-        if(not self.access(path, os.R_OK)):
+        if(not self._access(path, os.R_OK)):
             raise FuseOSError(errno.EACCES)
         
         right_path = self.get_right_path(path)
@@ -252,11 +258,11 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def rename(self, old, new):
         try:
-            if(not self.access(old, os.R_OK)):
+            if(not self._access(old, os.R_OK)):
                 raise FuseOSError(errno.ENOENT)
 
             try:
-                if self.access(new, os.R_OK):
+                if self._access(new, os.R_OK):
                     if not self.overwrite_rename_dest:
                         raise FuseOSError(errno.EEXIST)
             except FuseOSError as e:
