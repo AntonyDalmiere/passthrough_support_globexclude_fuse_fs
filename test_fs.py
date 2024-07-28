@@ -2188,5 +2188,87 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
         shutil.rmtree(self.mounted_dir, ignore_errors=True)
 
+class TestStartPassthroughFS_overwrite_rename_dest_true(unittest.TestCase):
+     def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.cache_dir = tempfile.mkdtemp()
+        self.mounted_dir = determine_mountdir_based_on_os()
+        print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
+        # Create a new process to launch the function start_passthrough_fs
+        self.p = multiprocessing.Process(target=start_passthrough_fs,
+                                          kwargs={'mountpoint': self.mounted_dir,
+                                                  'root': self.temp_dir,
+                                                  'cache_dir': self.cache_dir,
+                                                  'overwrite_rename_dest': True})
+        self.p.start()
+        time.sleep(5)
+
+     def test_rename_overwrite_true(self):
+         file1 = os.path.join(self.mounted_dir, 'file1.txt')
+         file2 = os.path.join(self.mounted_dir, 'file2.txt')
+
+         with open(file1, 'w') as f:
+             f.write('Content 1')
+         with open(file2, 'w') as f:
+             f.write('Content 2')
+
+         os.rename(file1, file2)
+
+         with open(file2, 'r') as f:
+             self.assertEqual(f.read(), 'Content 1')
+
+
+     def tearDown(self):
+         self.p.kill()
+         #unmount fs
+         if os.name != 'nt':
+             os.system(f'fusermount -u {self.mounted_dir}')
+         time.sleep(2)
+         #remove the temporary directories even if they are not empty
+         shutil.rmtree(self.temp_dir, ignore_errors=True)
+         shutil.rmtree(self.cache_dir, ignore_errors=True)
+         shutil.rmtree(self.mounted_dir, ignore_errors=True)
+
+class TestStartPassthroughFS_overwrite_rename_dest_false(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.cache_dir = tempfile.mkdtemp()
+        self.mounted_dir = determine_mountdir_based_on_os()
+        print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
+        # Create a new process to launch the function start_passthrough_fs
+        self.p = multiprocessing.Process(target=start_passthrough_fs,
+                                          kwargs={'mountpoint': self.mounted_dir,
+                                                  'root': self.temp_dir,
+                                                  'cache_dir': self.cache_dir,
+                                                  'overwrite_rename_dest': False})
+        self.p.start()
+        time.sleep(5)
+
+    def test_rename_overwrite_false(self):
+        file1 = os.path.join(self.mounted_dir, 'file1.txt')
+        file2 = os.path.join(self.mounted_dir, 'file2.txt')
+
+        with open(file1, 'w') as f:
+            f.write('Content 1')
+        with open(file2, 'w') as f:
+            f.write('Content 2')
+
+        with self.assertRaises(FileExistsError):
+            os.rename(file1, file2)
+
+        with open(file2, 'r') as f:
+            self.assertEqual(f.read(), 'Content 2')
+
+    def tearDown(self):
+        self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        time.sleep(2)
+        #remove the temporary directories even if they are not empty
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+        shutil.rmtree(self.mounted_dir, ignore_errors=True)
+
 if __name__ == '__main__':
     unittest.main()
