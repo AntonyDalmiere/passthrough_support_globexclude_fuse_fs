@@ -96,6 +96,10 @@ PassthroughSupportExcludeGlobFS is licensed under the CC-BY-NC-ND License. See t
 
 ## FAQ
 
+**Q: What sets `passthrough_support_excludeglob_fs` apart from other union filesystems like UnionFS, OverlayFS, and mergerfs?**
+
+**A:** `passthrough_support_excludeglob_fs` offers a unique combination of union mount capabilities with glob pattern exclusion. This allows you to merge directories while precisely controlling which files and folders are included or excluded. It's particularly useful for selective syncing and providing flexibility that other union filesystems might not offer allowing you to do *selective mouting*.
+
 **Q: How do I unmount the filesystem?**
 
 **A:** On Linux and macOS, you can use the `fusermount -u <mountpoint>` command. On Windows, you can use the "Unmount" option in the WinFsp context menu for the mountpoint.
