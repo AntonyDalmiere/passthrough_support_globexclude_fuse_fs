@@ -519,8 +519,8 @@ def cli() -> None:
     options: Dict[str, Any] = parse_options(args.options)
     # Pass each options value to the right type using str2type () except for patterns
     for key in options:
-        if key != 'patterns' and key != 'overwrite_rename_dest':
-            options[key] = str2type(options[key].replace('\:', ':').replace('\,', ',').replace('\=', '=').replace('\\ ', ' '), decode_escape=False)
+        if key != 'patterns':
+            options[key] = str2type(options[key].replace('\\:', ':').replace('\\,', ',').replace('\\=', '=').replace('\\ ', ' '), decode_escape=False)
 
     if 'patterns' in options:
         # Split patterns to list[str] based on the separator ':' but support escaping the separator
