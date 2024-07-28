@@ -133,15 +133,8 @@ class PassthroughFS(LoggingMixIn,Operations):
         right_path = self.get_right_path(path)
 
         if os.path.lexists(right_path):
-            with open(right_path, 'rb') as f:
-                f.seek(offset)
-                data = b""
-                while len(data) < length:
-                    chunk = f.read(length - len(data))
-                    if not chunk:
-                        break
-                    data += chunk
-                return data
+            os.lseek(self.file_handles[fh].real_fh, offset, os.SEEK_SET)
+            return os.read(self.file_handles[fh].real_fh, length)
         else:
             raise FuseOSError(errno.ENOENT)
 
@@ -153,15 +146,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         if not os.path.lexists(right_path):
             raise FuseOSError(errno.ENOENT)
 
-        # with open(right_path, 'r+b' if os.path.exists(right_path) else 'wb') as f:
-        #     f.seek(offset)
-        #     total_written = 0
-        #     while total_written < len(buf):
-        #         written = f.write(buf[total_written:])
-        #         if written == 0:
-        #             raise IOError("Failed to write entire buffer") 
-        #         total_written += written
-        #use os.write instead
         os.lseek(self.file_handles[fh].real_fh, offset, os.SEEK_SET)
         total_written = os.write(self.file_handles[fh].real_fh, buf)
         os.fsync(self.file_handles[fh].real_fh)  
@@ -440,6 +424,7 @@ class PassthroughFS(LoggingMixIn,Operations):
     def release(self, path, fh):
         if fh in self.file_handles:
             try:
+                os.fsync(self.file_handles[fh].real_fh)
                 os.close(self.file_handles[fh].real_fh)
             except OSError as e:
                 if e.errno != errno.EBADF:
