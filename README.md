@@ -54,6 +54,7 @@ passthrough_support_excludeglob_fs <mountpoint> -o root=<root_directory>,[option
 - `gid=<group_id>`: The group ID to own the mounted filesystem (defaults to the current group).
 - `foreground=<True|False>`: Run PassthroughSupportExcludeGlobFS in the foreground (default true).
 - `nothreads=<True|False>`: Disable multi-threading (default true because untested).
+- `overwrite_rename_dest=<True|False>`: When renaming, if `True`, overwrite the destination file if it already exists. If `False`, the rename operation will fail if the destination file already exists. The default behavior is `False` on Windows and `True` on Linux and macOS.
 - `debug=<True|False>`: Enable debug logging.
 
 **Example:**
