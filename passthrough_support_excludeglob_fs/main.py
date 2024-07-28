@@ -31,11 +31,12 @@ class FileHandle:
         return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
 
 class PassthroughFS(LoggingMixIn,Operations):
-    def __init__(self, root, patterns, cache_dir):
+    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest):
         self.root:str = root
         self.patterns: list[str] = patterns
         self.cache_dir:str = cache_dir
         self.file_handles: Dict[int, FileHandle] = {} 
+        self.overwrite_rename_dest:bool = overwrite_rename_dest
         # self.use_ns = True
 
     def get_right_path(self, path) -> str:
@@ -256,7 +257,7 @@ class PassthroughFS(LoggingMixIn,Operations):
 
             try:
                 if self.access(new, os.R_OK):
-                    if os.name == 'nt':
+                    if not self.overwrite_rename_dest:
                         raise FuseOSError(errno.EEXIST)
             except FuseOSError as e:
                 if e.errno == errno.EEXIST:
@@ -479,7 +480,23 @@ def default_uid_and_gid():
         return -1, -1
     return os.getuid(), os.getgid()
 
-def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=False, overwrite_rename_dest:Literal['Auto', True, False]='Auto'):
+def default_overwrite_rename_dest() -> bool:
+    """
+    Returns the default value for the `overwrite_rename_dest` parameter.
+
+    This function checks the operating system and returns `False` if it is Windows,
+    and `True` otherwise. The purpose of this function is to provide a default value
+    for the `overwrite_rename_dest` parameter in the `start_passthrough_fs` function.
+
+    Returns:
+        bool: The default value for `overwrite_rename_dest`.
+    """
+    if os.name == 'nt':
+        return False
+    else:
+        return True
+    
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest()):
     if not root:
         raise ValueError("Root directory must be specified")
     if patterns:
@@ -493,7 +510,7 @@ def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None,
         print("Using default cache directory:", cache_dir)
     os.makedirs(name=cache_dir, exist_ok=True)
 
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir), mountpoint,foreground=foreground,nothreads=nothreads,debug=debug,uid=uid,gid=gid)
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir,overwrite_rename_dest=overwrite_rename_dest), mountpoint,foreground=foreground,nothreads=nothreads,debug=debug,uid=uid,gid=gid)
 
 def parse_options(options: str) -> Dict[str, str]:
     """Parse options string with escaping"""
@@ -525,11 +542,6 @@ def cli() -> None:
     if 'patterns' in options:
         # Split patterns to list[str] based on the separator ':' but support escaping the separator
         options['patterns'] = split_escaped(':', options['patterns'].replace('\\ ', ' '))
-
-    if 'overwrite_rename_dest' in options:
-        if options['overwrite_rename_dest'] not in ['Auto', 'True', 'False']:
-            raise ValueError("overwrite_rename_dest must be one of Auto, True, False")
-        options['overwrite_rename_dest'] = {'Auto': 'Auto', 'True': True, 'False': False}[options['overwrite_rename_dest']]
 
     try:
         start_passthrough_fs(args.mountpoint, **options)
