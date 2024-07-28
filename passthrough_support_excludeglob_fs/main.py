@@ -500,7 +500,7 @@ def parse_options(options: str) -> Dict[str, str]:
     options_dict: Dict[str, str] = {}
     for opt in re.split(r'(?<!\\),', options):
         key, value = re.split(r'(?<!\\)=', opt, maxsplit=1)
-        options_dict[key] = value.replace('\,', ',').replace('\=', '=').replace('\\ ', ' ')
+        options_dict[key] = value.replace('\\,', ',').replace('\\=', '=').replace('\\ ', ' ')
     return options_dict
 
 def split_escaped(separator: str, value: str) -> List[str]:
