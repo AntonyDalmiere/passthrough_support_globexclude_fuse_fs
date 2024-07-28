@@ -182,7 +182,6 @@ class PassthroughFS(LoggingMixIn,Operations):
             pathname = os.readlink(right_path)
         else:
             raise FuseOSError(errno.ENOENT)
-        print(f'Pathname: {pathname}')
         return pathname
 
     def rmdir(self, path):
