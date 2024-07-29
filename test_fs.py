@@ -2244,7 +2244,8 @@ class TestStartPassthroughFS_overwrite_rename_dest_true(unittest.TestCase):
                                           kwargs={'mountpoint': self.mounted_dir,
                                                   'root': self.temp_dir,
                                                   'cache_dir': self.cache_dir,
-                                                  'overwrite_rename_dest': True})
+                                                  'overwrite_rename_dest': True,
+                                                  'debug':True})
         self.p.start()
         time.sleep(5)
 
@@ -2257,8 +2258,15 @@ class TestStartPassthroughFS_overwrite_rename_dest_true(unittest.TestCase):
          with open(file2, 'w') as f:
              f.write('Content 2')
 
-         os.rename(file1, file2)
-
+         if os.name != 'nt':
+            os.rename(file1, file2)
+         else:
+             import ctypes
+             #Use ctype to call directly MoveFileExW
+             ret = ctypes.windll.kernel32.MoveFileExW(file1, file2, 0x1)
+             #The return value of MoveFileExW must be non-zero
+             self.assertNotEqual(ret, 0)
+             
          with open(file2, 'r') as f:
              self.assertEqual(f.read(), 'Content 1')
 
@@ -2298,9 +2306,15 @@ class TestStartPassthroughFS_overwrite_rename_dest_false(unittest.TestCase):
         with open(file2, 'w') as f:
             f.write('Content 2')
 
-        with self.assertRaises(FileExistsError):
-            os.rename(file1, file2)
-
+            if os.name != 'nt':
+                with self.assertRaises(FileExistsError):
+                    os.rename(file1, file2)
+            else:
+                import ctypes
+                #Use ctype to call directly MoveFileExW
+                ret = ctypes.windll.kernel32.MoveFileExW(file1, file2, 0x1)
+                #The return value of MoveFileExW must be non-zero
+                self.assertEqual(ret, 0)
         with open(file2, 'r') as f:
             self.assertEqual(f.read(), 'Content 2')
 
