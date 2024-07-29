@@ -2175,52 +2175,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
                 fcntl.flock(f, fcntl.LOCK_UN)
                 f.close()
           
-    def test_end_to_end_git_init(self):
-        if os.name == 'nt':
-            self.skipTest("end to end git not supported on Windows")
-        else:
-            env = os.environ.copy()
-            env['GIT_TRACE'] = '1'
-            p = subprocess.run(['git', 'init', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
-            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
-            #Ensure git repo is initialized
-            self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
-            
-    def test_end_to_end_git_clone(self):
-        if os.name == 'nt':
-            self.skipTest("end to end git not supported on Windows")
-        else:
-            env = os.environ.copy()
-            env['GIT_TRACE'] = '1'
-            p = subprocess.run(['git', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
-            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
-            #Ensure git repo is initialized
-            self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
 
-    def test_end_to_end_git_clone_and_create_file_then_commit(self):
-        if os.name == 'nt':
-            self.skipTest("end to end git not supported on Windows")
-        else:
-            env = os.environ.copy()
-            env['GIT_TRACE'] = '1'
-            p = subprocess.run(['git', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
-            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
-            #Ensure git repo is initialized
-            self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
-            #Create a file in the repo
-            file_path = os.path.join(self.mounted_dir,'test','test.txt')
-            with open(file_path, 'w') as f:
-                f.write('test content')
-            #Commit the file
-            p = subprocess.run(['git', 'add', 'test.txt'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
-            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
-            p = subprocess.run(['git', 'commit', '-m', '"test commit"'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
-            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
-            #Ensure the file is committed by retieving the name of the last commit
-            p = subprocess.run(['git', 'log', '--pretty=format:%s', '-n', '1'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
-            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
-            commit_message = p.stdout.decode('utf-8').strip()
-            self.assertEqual(commit_message, '"test commit"')
     def tearDown(self):
         self.p.kill()
         #unmount fs
@@ -2234,53 +2189,109 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         shutil.rmtree(self.mounted_dir, ignore_errors=True)
 
 class TestStartPassthroughFS_overwrite_rename_dest_true(unittest.TestCase):
-     def setUp(self):
+    def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.cache_dir = tempfile.mkdtemp()
         self.mounted_dir = determine_mountdir_based_on_os()
         print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
         # Create a new process to launch the function start_passthrough_fs
         self.p = multiprocessing.Process(target=start_passthrough_fs,
-                                          kwargs={'mountpoint': self.mounted_dir,
-                                                  'root': self.temp_dir,
-                                                  'cache_dir': self.cache_dir,
-                                                  'overwrite_rename_dest': True,
-                                                  'debug':True})
+                                            kwargs={'mountpoint': self.mounted_dir,
+                                                    'root': self.temp_dir,
+                                                    'cache_dir': self.cache_dir,
+                                                    'overwrite_rename_dest': True,
+                                                    'debug':False})
         self.p.start()
         time.sleep(5)
 
-     def test_rename_overwrite_true(self):
-         file1 = os.path.join(self.mounted_dir, 'file1.txt')
-         file2 = os.path.join(self.mounted_dir, 'file2.txt')
+    def test_rename_overwrite_true(self):
+        file1 = os.path.join(self.mounted_dir, 'file1.txt')
+        file2 = os.path.join(self.mounted_dir, 'file2.txt')
 
-         with open(file1, 'w') as f:
-             f.write('Content 1')
-         with open(file2, 'w') as f:
-             f.write('Content 2')
+        with open(file1, 'w') as f:
+            f.write('Content 1')
+        with open(file2, 'w') as f:
+            f.write('Content 2')
 
-         if os.name != 'nt':
+        if os.name != 'nt':
             os.rename(file1, file2)
-         else:
-             import ctypes
-             #Use ctype to call directly MoveFileExW
-             ret = ctypes.windll.kernel32.MoveFileExW(file1, file2, 0x1)
-             #The return value of MoveFileExW must be non-zero
-             self.assertNotEqual(ret, 0)
-             
-         with open(file2, 'r') as f:
-             self.assertEqual(f.read(), 'Content 1')
+        else:
+            import ctypes
+            #Use ctype to call directly MoveFileExW
+            ret = ctypes.windll.kernel32.MoveFileExW(file1, file2, 0x1)
+            #The return value of MoveFileExW must be non-zero
+            self.assertNotEqual(ret, 0)
+            
+        with open(file2, 'r') as f:
+            self.assertEqual(f.read(), 'Content 1')
 
+    def test_end_to_end_git_init(self):
+        env = os.environ.copy()
+        env['GIT_TRACE'] = '1'
+        if os.name == 'nt':
+            p = subprocess.run(['git.exe', 'init', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+        else:
 
-     def tearDown(self):
-         self.p.kill()
-         #unmount fs
-         if os.name != 'nt':
-             os.system(f'fusermount -u {self.mounted_dir}')
-         time.sleep(2)
-         #remove the temporary directories even if they are not empty
-         shutil.rmtree(self.temp_dir, ignore_errors=True)
-         shutil.rmtree(self.cache_dir, ignore_errors=True)
-         shutil.rmtree(self.mounted_dir, ignore_errors=True)
+            p = subprocess.run(['git', 'init', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+        self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+        #Ensure git repo is initialized
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
+            
+    def test_end_to_end_git_clone(self):
+        env = os.environ.copy()
+        env['GIT_TRACE'] = '1'
+        if os.name == 'nt':
+            p = subprocess.run(['git.exe', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+        else:
+
+            p = subprocess.run(['git', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+
+        self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+        #Ensure git repo is initialized
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
+
+    def test_end_to_end_git_clone_and_create_file_then_commit(self):
+        env = os.environ.copy()
+        env['GIT_TRACE'] = '1'
+        if os.name == 'nt':
+            p = subprocess.run(['git.exe', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+        else:
+            
+            p = subprocess.run(['git', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+        self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+        #Ensure git repo is initialized
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
+        #Create a file in the repo
+        file_path = os.path.join(self.mounted_dir,'test','test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+            #Commit the file
+            if os.name == 'nt':
+                p = subprocess.run(['git.exe', 'add', 'test.txt'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            else:
+                p = subprocess.run(['git', 'add', 'test.txt'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            p = subprocess.run(['git', 'commit', '-m', '"test commit"'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            #Ensure the file is committed by retieving the name of the last commit
+            if os.name == 'nt':
+                p = subprocess.run(['git.exe', 'log', '--pretty=format:%s', '-n', '1'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            else:
+                p = subprocess.run(['git', 'log', '--pretty=format:%s', '-n', '1'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            commit_message = p.stdout.decode('utf-8').strip()
+            self.assertEqual(commit_message, '"test commit"')
+
+    def tearDown(self):
+        self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        time.sleep(2)
+        #remove the temporary directories even if they are not empty
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+        shutil.rmtree(self.mounted_dir, ignore_errors=True)
 
 class TestStartPassthroughFS_overwrite_rename_dest_false(unittest.TestCase):
     def setUp(self):
