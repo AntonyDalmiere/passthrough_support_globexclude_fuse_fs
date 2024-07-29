@@ -197,7 +197,15 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def mkdir(self, path, mode) -> None:
         right_path = self.get_right_path(path)
-        return os.mkdir(right_path, mode)
+        #Retrieving the parent directory (path is already a dir)
+        parent_dir = os.path.dirname(path)
+        parent_dir_right_path = os.path.dirname(right_path)
+        #If access to parent directory is not allowed, raise an error
+        #We intentionallty check against os.R_OK instead of os.W_OK because we want to create the directory even if the parent directory is not writable to prevent bug in the translation of Unix permissions to Windows permissions
+        if not self._access(parent_dir, os.R_OK):
+            raise FuseOSError(errno.ENOENT)
+        self.makedirs(parent_dir_right_path, exist_ok=True)
+        os.mkdir(right_path, mode)
 
     def statfs(self, path):
         right_path = self.get_right_path(path)
