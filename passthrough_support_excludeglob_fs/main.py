@@ -77,7 +77,10 @@ class PassthroughFS(LoggingMixIn,Operations):
         right_path = self.get_right_path(path)
         if not os.path.lexists(right_path):
             raise FuseOSError(errno.ENOENT)
-        result = os.access(right_path, mode,follow_symlinks=False)
+        if os.name == 'nt':
+            return os.access(right_path, mode)
+        else:
+            return os.access(right_path, mode,follow_symlinks=False)
         return result
 
     def access(self, path, amode):
