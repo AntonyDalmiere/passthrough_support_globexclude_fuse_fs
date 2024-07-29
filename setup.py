@@ -34,7 +34,7 @@ class CustomInstall(install):
 
 setup(
     name='passthrough_support_excludeglob_fs',
-    version='1.14',
+    version='1.15',
     packages=find_packages(),
     description='A user-space filesystem that allows to exclude files from being shown in the filesystem using glob patterns',
     long_description=open('README.md').read(),
