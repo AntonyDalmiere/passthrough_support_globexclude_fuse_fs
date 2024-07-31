@@ -1085,12 +1085,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
     def test_large_file_read_write(self):
         file_path = os.path.join(self.mounted_dir, 'large_file_test.bin')
         size = 1 * 1024 * 1024 * 1024  # 1 GB
-        chunk_size = 1024 * 1024  # 1 MB
+        chunk_size = 10 * 1024 * 1024  # 10 MB
         
         # Write
         with open(file_path, 'wb') as f:
             for _ in range(size // chunk_size):
-                f.write(os.urandom(chunk_size))
+                f.write(random.randbytes(chunk_size))
         
         # Read and verify
         with open(file_path, 'rb') as f:
