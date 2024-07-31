@@ -7,8 +7,8 @@ import sys
 from typing import Any, Dict, List, Literal
 from refuse import _refactor
 _refactor.sys = sys # type: ignore
-from refuse.high import FUSE, FuseOSError, Operations,LoggingMixIn
-
+from refuse.high import FUSE, FuseOSError, Operations
+from .logginng_mixin import LoggingMixIn
 import errno
 from globmatch import glob_match
 import argparse
@@ -31,7 +31,8 @@ class FileHandle:
         return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
 
 class PassthroughFS(LoggingMixIn,Operations):
-    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest):
+    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest,debug,log_in_file,log_in_console,log_in_syslog):
+        LoggingMixIn.__init__(self, enable=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog)
         self.root:str = root
         self.patterns: list[str] = patterns
         self.cache_dir:str = cache_dir
@@ -503,7 +504,7 @@ def default_overwrite_rename_dest() -> bool:
     else:
         return True
     
-def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,debug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest()):
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,fusedebug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest(),debug:bool=False,log_in_file:str|None=None,log_in_console:bool=True,log_in_syslog:bool=False):
     if not root:
         raise ValueError("Root directory must be specified")
     if patterns:
@@ -517,7 +518,7 @@ def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None,
         print("Using default cache directory:", cache_dir)
     os.makedirs(name=cache_dir, exist_ok=True)
 
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir,overwrite_rename_dest=overwrite_rename_dest), mountpoint,foreground=foreground,nothreads=nothreads,debug=debug,uid=uid,gid=gid)
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir,overwrite_rename_dest=overwrite_rename_dest,debug=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog), mountpoint,foreground=foreground,nothreads=nothreads,debug=fusedebug,uid=uid,gid=gid)
 
 def parse_options(options: str) -> Dict[str, str]:
     """Parse options string with escaping"""
