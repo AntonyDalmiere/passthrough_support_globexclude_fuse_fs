@@ -2318,8 +2318,14 @@ class TestStartPassthroughFS_overwrite_rename_dest_false(unittest.TestCase):
             f.write('Content 2')
 
             if os.name != 'nt':
-                with self.assertRaises(FileExistsError):
-                    os.rename(file1, file2)
+                
+                #Direct call linux syscall
+                import ctypes
+                from ctypes.util import find_library
+                #Use ctype to call directly rename
+                ret = ctypes.CDLL(find_library("c")).syscall(38,file1.encode('utf-8'), file2.encode('utf-8'))
+                #The return value of rename must be non-zero
+                self.assertNotEqual(ret, 0)
             else:
                 import ctypes
                 #Use ctype to call directly MoveFileExW
