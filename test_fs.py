@@ -2281,6 +2281,52 @@ class TestStartPassthroughFS_overwrite_rename_dest_true(unittest.TestCase):
             self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
             commit_message = p.stdout.decode('utf-8').strip()
             self.assertEqual(commit_message, '"test commit"')
+    def test_end_to_end_git_clone_and_create_file_then_commit_then_rename_branch(self):
+        env = os.environ.copy()
+        env['GIT_TRACE'] = '1'
+        if os.name == 'nt':
+            p = subprocess.run(['git.exe', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+        else:
+            
+            p = subprocess.run(['git', 'clone','--verbose','https://github.com/backuppc/backuppc.git', 'test'], cwd=self.mounted_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+        self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+        #Ensure git repo is initialized
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir,'test' ,'.git')))
+        #Create a file in the repo
+        file_path = os.path.join(self.mounted_dir,'test','test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+            #Commit the file
+            if os.name == 'nt':
+                p = subprocess.run(['git.exe', 'add', 'test.txt'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            else:
+                p = subprocess.run(['git', 'add', 'test.txt'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            p = subprocess.run(['git', 'commit', '-m', '"test commit"'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            #Ensure the file is committed by retieving the name of the last commit
+            if os.name == 'nt':
+                p = subprocess.run(['git.exe', 'log', '--pretty=format:%s', '-n', '1'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            else:
+                p = subprocess.run(['git', 'log', '--pretty=format:%s', '-n', '1'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, msg=p.stderr.decode('utf-8'))
+            commit_message = p.stdout.decode('utf-8').strip()
+            self.assertEqual(commit_message, '"test commit"')
+            #Rename the branch
+            if os.name == 'nt':
+                p = subprocess.run(['git.exe', 'branch', '-m', 'test'], cwd=os.path.join(self.mounted_dir, 'test'),env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                p = subprocess.run(['git', 'branch', '-m', 'test'], cwd=os.path.join(self.mounted_dir, 'test'), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(p.returncode, 0, f'git branch -m test failed with error code {p.returncode} with stdout {p.stdout.decode("utf-8")} and stderr {p.stderr.decode("utf-8")}')
+            #Ensure the branch is renamed
+            if os.name == 'nt':
+                p = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            else:
+                p = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=os.path.join(self.mounted_dir, 'test'), stdout=subprocess.PIPE, stderr=subprocess.PIPE,env=env)
+            self.assertEqual(p.returncode, 0, f'git rev-parse --abbrev-ref HEAD failed with error code {p.returncode} with stdout {p.stdout.decode("utf-8")} and stderr {p.stderr.decode("utf-8")}')
+            branch_name = p.stdout.decode('utf-8').strip()
+            self.assertEqual(branch_name, 'test')
+
 
     def tearDown(self):
         self.p.kill()
