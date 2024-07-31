@@ -284,7 +284,10 @@ class PassthroughFS(LoggingMixIn,Operations):
                     # Replace the old path with the new path
                     new_path_of_handle = real_old_path.replace(self.get_right_path(original_old), self.get_right_path(original_new))
                     
-                    new_real_fh = os.open(new_path_of_handle, os.O_RDWR)
+                    open_flags = os.O_RDWR
+                    if os.name == 'nt':
+                        open_flags |= os.O_BINARY
+                    new_real_fh = os.open(new_path_of_handle, open_flags)
                     self.file_handles[fh] = FileHandle(new_path_of_handle, new_real_fh)
 
             # Get and close all open file handles in the hierarchy
@@ -317,6 +320,8 @@ class PassthroughFS(LoggingMixIn,Operations):
 
                     #copy
                     dest_fh = self.create(new_path, self.getattr(old_path)['st_mode'])
+                    #truncate destination file
+                    self.truncate(new_path, 0, dest_fh)
                     source_fh = self.open(old_path, os.O_RDONLY)
                     buffer_size = 4096
                     offset = 0
