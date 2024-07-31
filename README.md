@@ -151,7 +151,7 @@ For example, if the root directory is `/home/user/doc`, the cache directory will
 - The filesystem is not thread safe. It is recommended to keep the `nothreads` option to `True`.
 - Symbolic links are not tested on Windows and can be buggy.
 - Exclude glob patterns must never be relative to root directory. It is recommended to always prefix with `**/`.
-
+- The rename operation can be slow because it is internally implemented with a copy-and-delete operation. This operation can be slow for large files or directories. It is implemented this way to mitigate the non-deterministic order of operations. For example, the kernel or FUSE may reorder the operations and block the rename operation.
 
 **Q: How can I contribute to PassthroughSupportExcludeGlobFS?**
 
