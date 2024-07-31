@@ -11,7 +11,7 @@ def is_admin():
         return os.getuid() == 0
     except AttributeError:
         # Windows
-        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0 # type: ignore
     
 class LoggingMixIn:
     """Mixin for logging operations."""
