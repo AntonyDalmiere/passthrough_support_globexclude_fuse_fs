@@ -55,7 +55,11 @@ passthrough_support_excludeglob_fs <mountpoint> -o root=<root_directory>,[option
 - `foreground=<True|False>`: Run PassthroughSupportExcludeGlobFS in the foreground (default true).
 - `nothreads=<True|False>`: Disable multi-threading (default true because untested).
 - `overwrite_rename_dest=<True|False>`: When renaming, if `True`, overwrite the destination file if it already exists. If `False`, the rename operation will fail if the destination file already exists. The default behavior is `False` on Windows and `True` on Linux and macOS.
-- `debug=<True|False>`: Enable debug logging.
+- `debug=<True|False>`: Enable logging. Default is `False`. It must be enabled to use the `log_in_file`, `log_in_console` and `log_in_syslog` options. It is independent of `fusedebug` option. Be careful, it can generate a lot of logs.
+  - `log_in_syslog=<True|False>`: Log to the system log. Default is `False`. To use this option on Windows and so that the log is visible in the Windows Event Viewer, you must run the program as an administrator. However, it is not recommended to use this option on Windows because it can saturate the WIndows system log.
+  - `log_in_file=<log_file_path|None>`: Log to a file instead of the console. Default is `None` which means no log file.
+  - `log_in_console=<True|False>`: Log to the console. Default is `True`.
+- `fusedebug=<True|False>`: Enable native FUSE debugging. Default is `False`. It is independent of `debug`, `log_in_file`, `log_in_console` and `log_in_syslog` options and always prints to the console. Be careful, it can also generate a lot of logs.
 
 **Example:**
 
