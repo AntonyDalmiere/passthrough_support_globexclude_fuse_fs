@@ -330,8 +330,7 @@ class PassthroughFS(LoggingMixIn,Operations):
                         data = self.read(old_path, buffer_size, offset, source_fh)
                         if not data:
                             break
-                        self.write(new_path, data, offset, dest_fh)
-                        offset += len(data)
+                        offset += self.write(new_path, data, offset, dest_fh)
                     self.release(old_path, source_fh)
                     self.release(new_path, dest_fh)
   
