@@ -510,7 +510,7 @@ def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None,
         print("Excluded patterns: ", patterns)
     
     if debug:
-        print("Verbose mode enabled")
+        print("Verbose mode enabled",flush=True)
         
     if not cache_dir:
         cache_dir = os.path.join(user_cache_dir("PassthroughFS"), base64.b64encode(root.encode()).decode())
