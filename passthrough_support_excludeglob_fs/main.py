@@ -244,12 +244,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         if os.name == 'nt':
             raise FuseOSError(errno.ENOTSUP)
         link_location_path = self.get_right_path(link_location)
-        #write a file named a.txt in fulldir
-        with open(self.get_right_path("dfsdfs"), 'w') as f:
-            f.write('This is a test file')
-        #CHeck if link_location is either an absolute path relative to the mountpoint or a true absolute path
-
-
+ 
         os.symlink(name, link_location_path)
 
     def rename(self, old, new):
