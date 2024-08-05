@@ -386,8 +386,6 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
     def test_symlink_excluded_file(self):
         #skip on windows
-        if os.name == 'nt':
-            self.skipTest('Symlinks are not supported on Windows')
         original_path = os.path.join(self.mounted_dir, 'original.txt')
         with open(original_path, 'w') as f:
             f.write('original content')
@@ -668,9 +666,6 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.assertAlmostEqual(stat_result.st_mtime, current_time, delta=1)
 
     def test_symlink_to_excluded_file(self):
-        if os.name == 'nt':
-            self.skipTest('Symlinks are not fully supported on Windows')
-        
         excluded_file = os.path.join(self.mounted_dir, 'excluded.txt')
         with open(excluded_file, 'w') as f:
             f.write('excluded content')
@@ -1117,9 +1112,6 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         self.assertGreater(new_dir_mtime, dir_mtime)
 
     def test_symlink_to_directory(self):
-        if os.name == 'nt':
-            self.skipTest('Symlinks to directories are not fully supported on Windows')
-        
         dir_path = os.path.join(self.mounted_dir, 'symlink_target_dir')
         os.mkdir(dir_path)
         symlink_path = os.path.join(self.mounted_dir, 'dir_symlink')
@@ -1423,9 +1415,6 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         # 6. Verify changes in original file
 
         # Expected result: Symlinks should work correctly across cache_dir and temp_dir
-
-        if os.name == 'nt':
-            self.skipTest("Symlinks not fully supported on Windows")
 
         original_file = os.path.join(self.mounted_dir, 'original.bin')
         symlink_file = os.path.join(self.mounted_dir, 'symlink.txt')
