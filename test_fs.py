@@ -1437,6 +1437,8 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         with open(original_file, 'r') as f:
             modified_content = f.read()
         self.assertEqual(modified_content, 'Modified content')
+        self.assertTrue(os.path.lexists(symlink_file))
+        self.assertTrue(os.path.exists(original_file))
 
     def test_file_deletion_across_cache_and_temp(self):
         # Steps:
