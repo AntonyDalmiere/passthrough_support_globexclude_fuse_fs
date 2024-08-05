@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+from email.policy import default
+from multiprocessing import process
 import os
 import re
 import stat
 import sys
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, get_args
 from refuse import _refactor
 _refactor.sys = sys # type: ignore
 from refuse.high import FUSE, FuseOSError, Operations
@@ -22,6 +24,9 @@ import traceback
 import warnings
 with warnings.catch_warnings(action="ignore"):
     from str2type import str2type
+import subprocess
+from pylnk3 import for_file as create_lnk_file
+import tempfile
 
 class FileHandle:
     def __init__(self, path, real_fh):
@@ -30,14 +35,18 @@ class FileHandle:
     def __str__(self):
         return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
 
+symlink_creation_windows_type = Literal['skip', 'error', 'copy', 'create_lnkfile', 'real_symlink', 'script']
 class PassthroughFS(LoggingMixIn,Operations):
-    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest,debug,log_in_file,log_in_console,log_in_syslog):
+    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest,debug,log_in_file,log_in_console,log_in_syslog,symlink_creation_windows:symlink_creation_windows_type,symlink_creation_windows_script):
+
         LoggingMixIn.__init__(self, enable=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog)
         self.root:str = root
         self.patterns: list[str] = patterns
         self.cache_dir:str = cache_dir
         self.file_handles: Dict[int, FileHandle] = {} 
         self.overwrite_rename_dest:bool = overwrite_rename_dest
+        self.symlink_creation_windows:symlink_creation_windows_type = symlink_creation_windows
+        self.symlink_creation_windows_script:str|None = symlink_creation_windows_script
         # self.use_ns = True
 
     def get_right_path(self, path) -> str:
@@ -118,6 +127,11 @@ class PassthroughFS(LoggingMixIn,Operations):
         if os.name == 'nt':
             flags = os.O_RDWR | os.O_BINARY
         right_path = self.get_right_path(path)
+        #print type of the file at right_path with between REG, DIR, SYMLINK
+        st_mode = os.lstat(right_path).st_mode
+        if stat.S_ISLNK(st_mode):
+            return self.open(self.readlink(path), flags)
+            #return the information that file is a symlink
         if os.path.lexists(right_path):
             fh: FileHandle = FileHandle(right_path, os.open(right_path, flags))
         else:
@@ -172,6 +186,8 @@ class PassthroughFS(LoggingMixIn,Operations):
             raise FuseOSError(errno.ENOENT)
 
     def readlink(self, path):
+        if path == '/':
+            return errno.ENOSYS
         right_path = self.get_right_path(path)
         if os.path.lexists(right_path):
             pathname = os.readlink(right_path)
@@ -240,12 +256,62 @@ class PassthroughFS(LoggingMixIn,Operations):
             return os.unlink(right_path)
         raise FuseOSError(errno.ENOENT)
 
-    def symlink(self, link_location, name):
-        if os.name == 'nt':
-            raise FuseOSError(errno.ENOTSUP)
-        link_location_path = self.get_right_path(link_location)
- 
-        os.symlink(name, link_location_path)
+    def symlink(self, link_location: str, name: str) -> None:
+        """
+        Create a symbolic link to name at link_location.
+
+        Args:
+            link_location (str): The path of the symbolic link to be created.
+            name (str): The path of the target of the symbolic link.
+
+        Returns:
+            None
+        """
+        link_location_path: str = self.get_right_path(link_location)
+        if os.name != 'nt':
+            os.symlink(name, link_location_path)
+        else:
+            if self.symlink_creation_windows == 'skip':
+                return
+            if self.symlink_creation_windows == 'error':
+                raise FuseOSError(errno.ENOTSUP)
+                return
+            if self.symlink_creation_windows == 'copy':
+                # Copy file
+                self.log.debug("Copying symlink content from %s to %s", name, link_location_path)
+                shutil.copy2(name, link_location_path)
+                return
+            if self.symlink_creation_windows == 'create_lnkfile':
+                # get path of target and dest files
+                self.log.debug("Creating lnk file from %s to %s", name, link_location_path)
+                create_lnk_file(name, link_location_path)
+            if self.symlink_creation_windows == 'real_symlink':
+                # determine if target is a dir
+                target_name_is_dir: bool = False
+                try:
+                    target_name_is_dir = os.path.isdir(name)
+                except Exception:
+                    self.log.warning("Could not determine if %s is a directory", name)
+                # create real symlink
+                #remove potentially existing file at link_location_path
+                # try:
+                #     os.unlink(link_location_path)
+                # except Exception as e:
+                #     #print stack trace
+                #     traceback.print_exc()
+                #     pass
+                os.symlink(name, link_location_path, target_is_directory=target_name_is_dir)
+                return
+            if self.symlink_creation_windows == 'script':
+                # get script path
+                # Run windows programm/script at self.symlink_creation_windows_script with link_location and name as arguments
+                self.log.debug("Running script %s with arguments %s %s", self.symlink_creation_windows_script, link_location_path, name)
+                s: subprocess.CompletedProcess = subprocess.run([self.symlink_creation_windows_script, link_location_path, name], capture_output=True, text=True)
+                if s.returncode != 0:
+                    self.log.warn("Script finished with return code %s, stdout: %s, stderr: %s", s.returncode, s.stdout, s.stderr)
+                else:
+                    self.log.debug("Script finished with return code %s, stdout: %s, stderr: %s", s.returncode, s.stdout, s.stderr)
+                return
 
     def rename(self, old, new):
         try:
@@ -254,7 +320,7 @@ class PassthroughFS(LoggingMixIn,Operations):
 
             try:
                 if self._access(new, os.R_OK):
-                    if not self.overwrite_rename_dest:
+                    if not self.overwrite_rename_dest and 'fuse_hidden' not in old:
                         raise FuseOSError(errno.EEXIST)
             except FuseOSError as e:
                 if e.errno == errno.EEXIST:
@@ -309,7 +375,10 @@ class PassthroughFS(LoggingMixIn,Operations):
                 elif stat.S_ISLNK(self.getattr(old_path)['st_mode']):  # Symlink
                     source_path = self.get_right_path(old_path)
                     destination_path = self.get_right_path(new_path)
-                    os.rename(source_path, destination_path)
+                    #Delete the target  then create the symlink
+                    if os.path.lexists(destination_path):
+                        os.unlink(destination_path)
+                    shutil.copy2(source_path, destination_path, follow_symlinks=False)
                 else:  # File
                     #copy metadata to opened_file_atime_ctime
                     opened_file_atime_ctime[new_path] = (self.getattr(old_path)['st_atime'], self.getattr(old_path)['st_ctime'])
@@ -346,8 +415,10 @@ class PassthroughFS(LoggingMixIn,Operations):
             reopen_file_handles(old_handles, old, new)
             #reset the seek for each file handles
             for fh, pos in pos_per_fh.items():
-                os.lseek(self.file_handles[fh].real_fh, pos, os.SEEK_SET)
-
+                try:
+                    os.lseek(self.file_handles[fh].real_fh, pos, os.SEEK_SET)
+                except:
+                    pass
             #set back the atime and ctime for each file
             for path, (atime, ctime) in opened_file_atime_ctime.items():
                 os.utime(self.get_right_path(path), (atime, ctime))
@@ -497,8 +568,33 @@ def default_overwrite_rename_dest() -> bool:
         return False
     else:
         return True
+def default_symlink_creation_windows() -> symlink_creation_windows_type:
+    if os.name != 'nt':
+        return 'error'
+    #Detect if symlink creation is allowed
+    #Create a symlink to a file in temp dir
+    temp_dest_path = os.path.join(tempfile.gettempdir(), 'test_symlink_creation_windows')
+    #create destination file
+    with open(temp_dest_path, 'w') as f:
+        f.write('test')
+    temp_source_path = os.path.join(tempfile.gettempdir(), 'test_symlink_creation_windows_source')
+    #if symlink sucees set symlink_creation_windows to real_symlink else set it to error
+    try:
+        os.symlink(temp_dest_path, temp_source_path)
+        return 'real_symlink'
+    except OSError:
+        return 'error'
+    finally:
+        os.remove(temp_dest_path)
+        os.remove(temp_source_path)
+     
+def default_rellinks() -> bool:
+    if os.name == 'nt':
+        return True
+    else:
+        return False
     
-def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,fusedebug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest(),debug:bool=False,log_in_file:str|None=None,log_in_console:bool=True,log_in_syslog:bool=False):
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,fusedebug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest(),debug:bool=False,log_in_file:str|None=None,log_in_console:bool=True,log_in_syslog:bool=False,symlink_creation_windows:symlink_creation_windows_type=default_symlink_creation_windows(),symlink_creation_windows_script:str|None=None,rellinks:bool=default_rellinks()):
     if not root:
         raise ValueError("Root directory must be specified")
     if patterns:
@@ -512,7 +608,16 @@ def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None,
         print("Using default cache directory:", cache_dir)
     os.makedirs(name=cache_dir, exist_ok=True)
 
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir,overwrite_rename_dest=overwrite_rename_dest,debug=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog), mountpoint,foreground=foreground,nothreads=nothreads,debug=fusedebug,uid=uid,gid=gid)
+    #Check symlink_creation_windows
+    if symlink_creation_windows not in get_args(symlink_creation_windows_type):
+        raise ValueError(f"symlink_creation_windows must be one of {get_args(symlink_creation_windows_type)}")
+    if symlink_creation_windows == 'script':
+        if symlink_creation_windows_script is None:
+            raise ValueError("symlink_creation_windows_script must be specified when symlink_creation_windows is set to 'script'")
+        if not os.path.exists(symlink_creation_windows_script):
+            raise ValueError(f"symlink_creation_windows_script {symlink_creation_windows_script} does not exist")
+    
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir,overwrite_rename_dest=overwrite_rename_dest,debug=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog,symlink_creation_windows=symlink_creation_windows,symlink_creation_windows_script=symlink_creation_windows_script), mountpoint,foreground=foreground,nothreads=nothreads,debug=fusedebug,uid=uid,gid=gid,rellinks=rellinks)
 
 def parse_options(options: str) -> Dict[str, str]:
     """Parse options string with escaping"""
