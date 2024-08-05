@@ -1425,7 +1425,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         os.symlink(original_file, symlink_file)
 
         self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'original.bin')))
-        self.assertTrue(os.path.exists(os.path.join(self.cache_dir, 'symlink.txt')))
+        self.assertTrue(os.path.exists(os.path.join(self.mounted_dir, 'symlink.txt')))
 
         with open(symlink_file, 'r') as f:
             content = f.read()
