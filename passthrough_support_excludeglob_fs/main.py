@@ -25,6 +25,41 @@ import subprocess
 import pylnk3
 import tempfile
 
+
+def create_for_path_generator( size: int, st_mode: int
+) -> Callable[[str], pylnk3.PathSegmentEntry]:
+    """
+    Generate a function that creates a PathSegmentEntry for a given path.
+
+    Args:
+        path (str): The path for which to create the entry.
+        size (int): The size of the entry.
+        st_mode (int): The mode of the entry.
+
+    Returns:
+        Callable[[str], pylnk3.PathSegmentEntry]: A function that creates a
+        PathSegmentEntry for a given path.
+    """
+    def create_for_path(path: str) -> pylnk3.PathSegmentEntry:
+        """
+        Create a PathSegmentEntry for a given path.
+
+        Args:
+            path (str): The path for which to create the entry.
+
+        Returns:
+            pylnk3.PathSegmentEntry: The created PathSegmentEntry.
+        """
+        entry = pylnk3.PathSegmentEntry()
+        entry.type = (
+            pylnk3.TYPE_FOLDER if st_mode & 0o40000 else pylnk3.TYPE_FILE
+        )
+        entry.file_size = size
+        entry.full_name = os.path.split(path)[1]
+        entry.short_name = entry.full_name
+        return entry
+    return create_for_path
+
 class FileHandle:
     def __init__(self, path, real_fh):
         self.path = path
@@ -32,9 +67,9 @@ class FileHandle:
     def __str__(self):
         return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
 
-symlink_creation_windows_type = Literal['skip', 'error', 'copy', 'create_lnkfile', 'real_symlink', 'script']
+symlink_creation_windows_type = Literal['skip', 'error', 'copy', 'create_lnkfile', 'real_symlink']
 class PassthroughFS(LoggingMixIn,Operations):
-    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest,debug,log_in_file,log_in_console,log_in_syslog,symlink_creation_windows:symlink_creation_windows_type,symlink_creation_windows_script):
+    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest,debug,log_in_file,log_in_console,log_in_syslog,symlink_creation_windows:symlink_creation_windows_type,mountpoint):
 
         LoggingMixIn.__init__(self, enable=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog)
         self.root:str = root
@@ -43,8 +78,12 @@ class PassthroughFS(LoggingMixIn,Operations):
         self.file_handles: Dict[int, FileHandle] = {} 
         self.overwrite_rename_dest:bool = overwrite_rename_dest
         self.symlink_creation_windows:symlink_creation_windows_type = symlink_creation_windows
-        self.symlink_creation_windows_script:str|None = symlink_creation_windows_script
         # self.use_ns = True
+        self.mountpoint:str = mountpoint
+
+        #create a property to store list of dest file that must be ignored when they are the source of a rename
+        self.renameExcludedSourceFiles: list[str] = []
+        self.renameAppendLnkToFilenameFiles: list[str] = []
 
     def get_right_path(self, path) -> str:
         full_path = self.get_full_path(path)
@@ -98,6 +137,10 @@ class PassthroughFS(LoggingMixIn,Operations):
     def getattr(self, path, fh=None):
         right_path = self.get_right_path(path)
         if not os.path.lexists(right_path):
+             #Support symlink backed by lnk file
+            if self.symlink_creation_windows == 'create_lnkfile' and os.name == 'nt':
+                if not path.endswith('.lnk'):
+                    return self.getattr(path + '.lnk')
             raise FuseOSError(errno.ENOENT)
         st = os.lstat(right_path)
        
@@ -108,6 +151,9 @@ class PassthroughFS(LoggingMixIn,Operations):
         #add st_birthtime to st_dict
         if os.name == 'nt':
             st_dict['st_mode'] = st_dict['st_mode'] | 0o777
+            #Support symlink backed by lnk file
+            if self.symlink_creation_windows == 'create_lnkfile' and path.endswith('.lnk'):
+                st_dict['st_mode'] = st_dict['st_mode'] | 0o120000
         return st_dict
 
     def readdir(self, path, fh):
@@ -118,6 +164,9 @@ class PassthroughFS(LoggingMixIn,Operations):
             dirents.extend(os.listdir(full_path))
         if os.path.isdir(cache_path):
             dirents.extend(os.listdir(cache_path))
+        #Support symlink backed by lnk file
+        if self.symlink_creation_windows == 'create_lnkfile' and os.name == 'nt':
+            dirents = [entry[:-4] if entry.endswith('.lnk') else entry for entry in dirents]
         return set(dirents)
 
     def open(self, path, flags) -> int:
@@ -128,7 +177,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         st_mode = os.lstat(right_path).st_mode
         if stat.S_ISLNK(st_mode):
             return self.open(self.readlink(path), flags)
-            #return the information that file is a symlink
         if os.path.lexists(right_path):
             fh: FileHandle = FileHandle(right_path, os.open(right_path, flags))
         else:
@@ -185,6 +233,18 @@ class PassthroughFS(LoggingMixIn,Operations):
     def readlink(self, path):
         if path == '/':
             return errno.ENOSYS
+        #Support symlink backed by lnk file
+        if self.symlink_creation_windows == 'create_lnkfile' and os.name == 'nt':
+            stored_path: str = pylnk3.parse(self.get_right_path(path + '.lnk')).path
+            #On FS sored_path look like : Q:\symlink_test.txt
+            #However , supported on FS path should be : /symlink_test.txt
+            #If sorted_path don't start with current mountpoint, the symlink point to external FS
+            if not stored_path.startswith(self.mountpoint):
+                return stored_path
+            else:
+                #Remove the mountpoint from the path
+                stored_path = stored_path.replace(self.mountpoint + "\\", "/")
+                return stored_path
         right_path = self.get_right_path(path)
         if os.path.lexists(right_path):
             pathname = os.readlink(right_path)
@@ -269,6 +329,8 @@ class PassthroughFS(LoggingMixIn,Operations):
             os.symlink(name, link_location_path)
         else:
             if self.symlink_creation_windows == 'skip':
+                #add the dest file to the list of dest file that must be ignored when they are the source of a rename
+                self.renameExcludedSourceFiles.append(link_location)
                 return
             if self.symlink_creation_windows == 'error':
                 raise FuseOSError(errno.ENOTSUP)
@@ -276,12 +338,24 @@ class PassthroughFS(LoggingMixIn,Operations):
             if self.symlink_creation_windows == 'copy':
                 # Copy file
                 self.log.debug("Copying symlink content from %s to %s", name, link_location_path)
-                shutil.copy2(name, link_location_path)
+                shutil.copy2(self.get_right_path(name), link_location_path)
                 return
             if self.symlink_creation_windows == 'create_lnkfile':
                 # get path of target and dest files
                 self.log.debug("Creating lnk file from %s to %s", name, link_location_path)
-                create_lnk_file(name, link_location_path)
+                #Check if name is relatuve or absolute
+                original_name = name
+                if name.startswith('/'):
+                    name = self.mountpoint + os.path.sep + name[1:]
+                self.renameAppendLnkToFilenameFiles.append(link_location)
+                st_mode = self.getattr(original_name)['st_mode']
+                st_size = self.getattr(original_name)['st_size']
+
+                pylnk3.PathSegmentEntry.create_for_path = create_for_path_generator( st_size, st_mode)
+
+                levels = list(pylnk3.path_levels(name))
+
+                pylnk3.for_file(name, link_location_path)
             if self.symlink_creation_windows == 'real_symlink':
                 # determine if target is a dir
                 target_name_is_dir: bool = False
@@ -299,18 +373,25 @@ class PassthroughFS(LoggingMixIn,Operations):
                 #     pass
                 os.symlink(name, link_location_path, target_is_directory=target_name_is_dir)
                 return
-            if self.symlink_creation_windows == 'script':
-                # get script path
-                # Run windows programm/script at self.symlink_creation_windows_script with link_location and name as arguments
-                self.log.debug("Running script %s with arguments %s %s", self.symlink_creation_windows_script, link_location_path, name)
-                s: subprocess.CompletedProcess = subprocess.run([self.symlink_creation_windows_script, link_location_path, name], capture_output=True, text=True)
-                if s.returncode != 0:
-                    self.log.warn("Script finished with return code %s, stdout: %s, stderr: %s", s.returncode, s.stdout, s.stderr)
-                else:
-                    self.log.debug("Script finished with return code %s, stdout: %s, stderr: %s", s.returncode, s.stdout, s.stderr)
-                return
 
     def rename(self, old, new):
+        #Check if the dest file is ignored by rename
+        if old in self.renameExcludedSourceFiles:
+            #Remove the element from the list
+            self.renameExcludedSourceFiles.remove(old)
+            self.unlink(new)
+            return 0
+        #Check if the new filename should be suffixed with .lnk
+        if old in self.renameAppendLnkToFilenameFiles:
+            #Remove the element from the list
+            try:
+                self.unlink(new)
+            except Exception:
+                pass
+
+            self.renameAppendLnkToFilenameFiles.remove(old)
+            new = new + '.lnk'
+
         try:
             if(not self._access(old, os.R_OK)):
                 raise FuseOSError(errno.ENOENT)
@@ -421,8 +502,8 @@ class PassthroughFS(LoggingMixIn,Operations):
                 os.utime(self.get_right_path(path), (atime, ctime))
 
         except Exception:
-            traceback.print_exc()
-            raise
+                traceback.print_exc()
+                raise
         return 0
 
     def utimens(self, path, times=None):
@@ -591,7 +672,7 @@ def default_rellinks() -> bool:
     else:
         return False
     
-def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,fusedebug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest(),debug:bool=False,log_in_file:str|None=None,log_in_console:bool=True,log_in_syslog:bool=False,symlink_creation_windows:symlink_creation_windows_type=default_symlink_creation_windows(),symlink_creation_windows_script:str|None=None,rellinks:bool=default_rellinks()):
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,fusedebug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest(),debug:bool=False,log_in_file:str|None=None,log_in_console:bool=True,log_in_syslog:bool=False,symlink_creation_windows:symlink_creation_windows_type=default_symlink_creation_windows(),rellinks:bool=default_rellinks()):
     if not root:
         raise ValueError("Root directory must be specified")
     if patterns:
@@ -608,13 +689,8 @@ def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None,
     #Check symlink_creation_windows
     if symlink_creation_windows not in get_args(symlink_creation_windows_type):
         raise ValueError(f"symlink_creation_windows must be one of {get_args(symlink_creation_windows_type)}")
-    if symlink_creation_windows == 'script':
-        if symlink_creation_windows_script is None:
-            raise ValueError("symlink_creation_windows_script must be specified when symlink_creation_windows is set to 'script'")
-        if not os.path.exists(symlink_creation_windows_script):
-            raise ValueError(f"symlink_creation_windows_script {symlink_creation_windows_script} does not exist")
     
-    fuse = FUSE(PassthroughFS(root, patterns, cache_dir,overwrite_rename_dest=overwrite_rename_dest,debug=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog,symlink_creation_windows=symlink_creation_windows,symlink_creation_windows_script=symlink_creation_windows_script), mountpoint,foreground=foreground,nothreads=nothreads,debug=fusedebug,uid=uid,gid=gid,rellinks=rellinks)
+    fuse = FUSE(PassthroughFS(root, patterns, cache_dir,overwrite_rename_dest=overwrite_rename_dest,debug=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog,symlink_creation_windows=symlink_creation_windows,mountpoint=mountpoint), mountpoint,foreground=foreground,nothreads=nothreads,debug=fusedebug,uid=uid,gid=gid,rellinks=rellinks)
 
 def parse_options(options: str) -> Dict[str, str]:
     """Parse options string with escaping"""
