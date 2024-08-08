@@ -2179,6 +2179,187 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
         shutil.rmtree(self.mounted_dir, ignore_errors=True)
 
+class TestStartPassthroughFS_symlink_creation_windows(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.cache_dir = tempfile.mkdtemp()
+        self.mounted_dir = determine_mountdir_based_on_os()
+        print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
+        # Create a new process to launch the function start_passthrough_fs
+        self.p = multiprocessing.Process(target=start_passthrough_fs,
+                                            kwargs={'mountpoint': self.mounted_dir,
+                                                    'root': self.temp_dir,
+                                                    'cache_dir': self.cache_dir,
+                                                    'debug':False,
+                                                    'symlink_creation_windows':'error'})
+        self.p.start()
+        time.sleep(5)
+
+    def test_symlink_creation_windows_error(self):
+        #if not windows, skip test
+        if os.name != 'nt':
+            self.skipTest('This test is specific to Windows')
+        file_path = os.path.join(self.mounted_dir, 'symlink_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        with self.assertRaises(OSError):
+            os.symlink(file_path, os.path.join(self.mounted_dir, 'symlink_test_symlink.txt'))
+
+    def tearDown(self):
+        self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        time.sleep(2)
+        #remove the temporary directories even if they are not empty
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+        shutil.rmtree(self.mounted_dir, ignore_errors=True)
+
+class TestStartPassthroughFS_symlink_creation_windows_skip(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.cache_dir = tempfile.mkdtemp()
+        self.mounted_dir = determine_mountdir_based_on_os()
+        print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
+        # Create a new process to launch the function start_passthrough_fs
+        self.p = multiprocessing.Process(target=start_passthrough_fs,
+                                            kwargs={'mountpoint': self.mounted_dir,
+                                                    'root': self.temp_dir,
+                                                    'cache_dir': self.cache_dir,
+                                                    'symlink_creation_windows':'skip',
+                                                    'debug':True})
+        self.p.start()
+        time.sleep(5)
+
+    def test_symlink_creation_windows_skip(self):
+        #if not windows, skip test
+        if os.name != 'nt':
+            self.skipTest('This test is specific to Windows')
+        #The symlink operation don't raise error but change nothing
+        file_path = os.path.join(self.mounted_dir, 'symlink_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        os.symlink(file_path, os.path.join(self.mounted_dir, 'symlink_test_symlink.txt'))
+        #The symlink file should be an empty regular file
+        self.assertFalse(os.path.isfile(os.path.join(self.mounted_dir, 'symlink_test_symlink.txt')))
+        #Ensure symlink not exist
+        self.assertFalse(os.path.exists(os.path.join(self.mounted_dir, 'symlink_test_symlink.txt')))
+        #Ensure original file is not a symlink
+        self.assertFalse(os.path.islink(file_path))
+        #Ensure original file is unchaged
+        with open(file_path, 'r') as f:
+            self.assertEqual(f.read(), 'test content')
+    def tearDown(self):
+        self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        time.sleep(2)
+        #remove the temporary directories even if they are not empty
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+        shutil.rmtree(self.mounted_dir, ignore_errors=True)
+
+class TestStartPassthroughFS_symlink_creation_windows_copy(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.cache_dir = tempfile.mkdtemp()
+        self.mounted_dir = determine_mountdir_based_on_os()
+        print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
+        # Create a new process to launch the function start_passthrough_fs
+        self.p = multiprocessing.Process(target=start_passthrough_fs,
+                                            kwargs={'mountpoint': self.mounted_dir,
+                                                    'root': self.temp_dir,
+                                                    'cache_dir': self.cache_dir,
+                                                    'symlink_creation_windows':'copy',
+                                                    'debug':False})
+        self.p.start()
+        time.sleep(5)
+
+    def test_symlink_creation_windows_copy(self):
+        #if not windows, skip test
+        if os.name != 'nt':
+            self.skipTest('This test is specific to Windows')
+        file_path = os.path.join(self.mounted_dir, 'symlink_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        os.symlink(file_path, os.path.join(self.mounted_dir, 'symlink_test_symlink.txt'))
+        #The symlink file should be a regular file
+        self.assertTrue(os.path.isfile(os.path.join(self.mounted_dir, 'symlink_test_symlink.txt')))
+        self.assertEqual(os.path.getsize(os.path.join(self.mounted_dir, 'symlink_test_symlink.txt')), os.path.getsize(file_path))
+        # Test islink
+        self.assertFalse(os.path.islink(os.path.join(self.mounted_dir, 'symlink_test_symlink.txt')))
+        #Content should be the same
+        with open(file_path, 'r') as f:
+            self.assertEqual(f.read(), 'test content')
+
+    def tearDown(self):
+        self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        time.sleep(2)
+        #remove the temporary directories even if they are not empty
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+        shutil.rmtree(self.mounted_dir, ignore_errors=True)
+
+
+class TestStartPassthroughFS_symlink_creation_windows_create_lnkfile(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.cache_dir = tempfile.mkdtemp()
+        self.mounted_dir = determine_mountdir_based_on_os()
+        print(f'Temporary directory: {self.temp_dir} and mounted directory: {self.mounted_dir}')
+        # Create a new process to launch the function start_passthrough_fs
+        self.p = multiprocessing.Process(target=start_passthrough_fs,
+                                            kwargs={'mountpoint': self.mounted_dir,
+                                                    'root': self.temp_dir,
+                                                    'cache_dir': self.cache_dir,
+                                                    'symlink_creation_windows':'create_lnkfile'})
+        self.p.start()
+        time.sleep(5)
+    def test_symlink_creation_windows_create_lnkfile(self):
+        #if not windows, skip test
+        if os.name != 'nt':
+            self.skipTest('This test is specific to Windows')
+        file_path = os.path.join(self.mounted_dir, 'symlink_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        os.symlink(file_path, os.path.join(self.mounted_dir, 'symlink_test_symlink.txt'))
+        #print content of symlink
+        with open(os.path.join(self.mounted_dir, 'symlink_test_symlink.txt'), 'r') as f:
+            content = f.read()
+        self.assertEqual(content, 'test content')
+
+    #Same as abobe but create a symlink in a more complex dir structure, ie. not at the root but first mkdir
+    def test_symlink_creation_windows_create_lnkfile_complex_first_mkdir(self):
+        #if not windows, skip test
+        if os.name != 'nt':
+            self.skipTest('This test is specific to Windows')
+        dir_path = os.path.join(self.mounted_dir, 'dir1')
+        os.mkdir(dir_path)
+        file_path = os.path.join(self.mounted_dir, 'symlink_test.txt')
+        with open(file_path, 'w') as f:
+            f.write('test content')
+        os.symlink(file_path, os.path.join(self.mounted_dir, 'dir1', 'symlink_test_symlink.txt'))
+        with open(os.path.join(self.mounted_dir,'dir1','symlink_test_symlink.txt'), 'r') as f:
+            content = f.read()
+        self.assertTrue(os.path.islink(os.path.join(self.mounted_dir, 'dir1', 'symlink_test_symlink.txt')))
+        self.assertEqual(content, 'test content')
+
+
+    def tearDown(self):
+        self.p.kill()
+        #unmount fs
+        if os.name != 'nt':
+            os.system(f'fusermount -u {self.mounted_dir}')
+        time.sleep(2)
+        #remove the temporary directories even if they are not empty
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        shutil.rmtree(self.cache_dir, ignore_errors=True)
+        shutil.rmtree(self.mounted_dir, ignore_errors=True)
 class TestStartPassthroughFS_overwrite_rename_dest_true(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
