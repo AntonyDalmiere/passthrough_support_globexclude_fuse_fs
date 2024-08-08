@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-from email.policy import default
-from multiprocessing import process
 import os
 import re
 import stat
 import sys
-from typing import Any, Dict, List, Literal, get_args
+from typing import Any, Callable, Dict, List, Literal, get_args
 from refuse import _refactor
 _refactor.sys = sys # type: ignore
 from refuse.high import FUSE, FuseOSError, Operations
@@ -17,7 +15,6 @@ import argparse
 from appdirs import user_cache_dir
 import base64
 import psutil
-import logging
 from pathlib import Path
 import shutil
 import traceback
@@ -25,7 +22,7 @@ import warnings
 with warnings.catch_warnings(action="ignore"):
     from str2type import str2type
 import subprocess
-from pylnk3 import for_file as create_lnk_file
+import pylnk3
 import tempfile
 
 class FileHandle:
