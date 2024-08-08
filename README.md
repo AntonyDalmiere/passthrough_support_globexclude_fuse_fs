@@ -60,14 +60,48 @@ passthrough_support_excludeglob_fs <mountpoint> -o root=<root_directory>,[option
   - `log_in_file=<log_file_path|None>`: Log to a file instead of the console. Default is `None` which means no log file.
   - `log_in_console=<True|False>`: Log to the console. Default is `True`.
 - `fusedebug=<True|False>`: Enable native FUSE debugging. Default is `False`. It is independent of `debug`, `log_in_file`, `log_in_console` and `log_in_syslog` options and always prints to the console. Be careful, it can also generate a lot of logs.
+- `symlink_creation_windows=<skip|error|copy|create_lnkfile|real_symlink>`: Define how to handle symlinks created on Windows. Default is `real_symlink` with fallback to `error` if there is insufficient privileges. The possible values are:
+  - `skip`: Skip the symlink creation. Fail silently.
+  - `error`: Raise an error at the time of symlink creation.
+  - `copy`: Copy the target file to the symlink location.
+  - `create_lnkfile`: Create a new lnk file in the symlink location. Also resolve .lnk files as symlinks.
+  - `real_symlink`: Real Windows symlink. Backed by NTFS ReparsePoint. Requires administrator privileges.
+- `rellinks=<True|False>`: Convert POSIX absolute symlinks to drive-relative symlinks. Default is `True` on Windows (mandatory for symlinks to work) and `False` on Linux and macOS.
 
-**Example:**
+
+
+**Example 1:**
 
 ```bash
-passthrough_support_excludeglob_fs /mnt/union -o root=/path/to/lower,patterns='**/*.log:**/*.tmp'
+passthrough_support_excludeglob_fs /mnt/union -o root=/path/to/lower,patterns='**/*.log/*:**/*.tmp/*'
 ```
 
-This command will mount a union filesystem at `/mnt/union`, merging the contents of `/path/to/lower` with a cache directory. All files matching the patterns `**/*.log` and `**/*.tmp` will be excluded from the lower directory and stored in the  user local directory.
+This command will mount a union filesystem at `/mnt/union`, merging the contents of `/path/to/lower` with a cache directory. All files matching the patterns `**/*.log/*` and `**/*.tmp/*` will be excluded from the root directory and stored somewhere in the cache directory.
+
+**Example 2:**
+
+
+```bash
+passthrough_support_excludeglob_fs /mnt/union -o root=/path/to/lower,patterns='**/*.log/*:**/*.tmp/*',cache_dir=/path/to/cache
+```
+
+This command will mount a union filesystem at `/mnt/union`, merging the contents of `/path/to/lower` with a cache directory. All files matching the patterns `**/*.log/*` and `**/*.tmp/*` will be excluded from the root directory and stored in the cache directory `/path/to/cache`.
+
+**Example 3:**
+
+```bash
+passthrough_support_excludeglob_fs /mnt/union -o root=/path/to/lower,patterns='**/*.log/*:**/*.tmp/*',cache_dir=/path/to/cache,overwrite_rename_dest=True
+```
+
+Same as above but can resolve issues with renaming files.
+
+**Example 4:**
+
+```bash
+passthrough_support_excludeglob_fs /mnt/union -o root=/path/to/lower,patterns='**/*.log/*:**/*.tmp/*',cache_dir=/path/to/cache,overwrite_rename_dest=True,debug=True
+```
+
+Same as above but with debug enabled.
 
 ### Python API
 
@@ -75,8 +109,10 @@ This command will mount a union filesystem at `/mnt/union`, merging the contents
 from passthrough_support_excludeglob_fs import start_passthrough_fs
 
 # Start the filesystem
-start_passthrough_fs(mountpoint='/mnt/union', root='/path/to/lower', patterns=['**/*.log', '**/*.tmp'], cache_dir='/path/to/cache' )
+start_passthrough_fs(mountpoint='/mnt/union', root='/path/to/lower', patterns=['**/*.log/*', '**/*.tmp/*'], cache_dir='/path/to/cache' )
 ```
+Like in the CLI, it will mount a union filesystem at `/mnt/union`, merging the contents of `/path/to/lower` with a cache directory. All files matching the patterns `**/*.log/*` and `**/*.tmp/*` will be excluded from the root directory and stored somewhere in the cache directory. The function is blocking and return only if a fatal error in the filesystem occurs. Note the function provide type hints.
+
 
 ## Glob Pattern Syntax
 
@@ -153,8 +189,8 @@ For example, if the root directory is `/home/user/doc`, the cache directory will
 **A:** Common know bugs:
 - Metadata time (`ctime`,`atime`,`mtime`) are sometime updated even if the file is not accessed or modified. It can happen during the first access of a misplaced file.
 - The filesystem is not thread safe. It is recommended to keep the `nothreads` option to `True`.
-- Symbolic links are not tested on Windows and can be buggy.
-- Exclude glob patterns must never be relative to root directory. It is recommended to always prefix with `**/`.
+- Instability with .lnk backed symlinks on Windows.
+- Exclude glob patterns should never be relative to root directory. It is recommended to always prefix with `**/`.
 - The rename operation can be slow because it is internally implemented with a copy-and-delete operation. This operation can be slow for large files or directories. It is implemented this way to mitigate the non-deterministic order of operations. For example, the kernel or FUSE may reorder the operations and block the rename operation.
 
 **Q: How can I contribute to PassthroughSupportExcludeGlobFS?**
@@ -163,4 +199,4 @@ For example, if the root directory is `/home/user/doc`, the cache directory will
 
 **Q: Where can I get help or ask questions?**
 
-**A:** You can open an issue on our GitHub repository.
+**A:** You can open an issue on the GitHub repository.
