@@ -427,8 +427,6 @@ def test_cli_escaping_cachedir(command_location):
     mountpoint_dir = determine_mountdir_based_on_os()
     cache_dir = tempfile.mkdtemp(prefix="cache\\,dir\\=")
 
-    print(f'cache_dir: {cache_dir}')
-
 
     # Run the CLI command in a separate process with escaping
     cli_command = [
