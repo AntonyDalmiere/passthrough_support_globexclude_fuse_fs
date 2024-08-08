@@ -432,7 +432,7 @@ def test_cli_escaping_cachedir(command_location):
 
     # Run the CLI command in a separate process with escaping
     cli_command = [
-        str(command_location / "bin" / "passthrough_support_excludeglob_fs"),
+        str(command_location / "passthrough_support_excludeglob_fs"),
         mountpoint_dir,
         "-o",
         f"root={root_dir},cache_dir={cache_dir}"
