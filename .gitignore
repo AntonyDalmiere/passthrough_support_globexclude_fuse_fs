@@ -137,3 +137,4 @@ install_manifest.txt
 
 .vscode/
 .aider.*
+.aider*
