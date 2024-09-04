@@ -24,6 +24,13 @@ with warnings.catch_warnings(action="ignore"):
 import subprocess
 import pylnk3
 import tempfile
+class FileHandle:
+    def __init__(self, path, real_fh):
+        self.path = path
+        self.real_fh = real_fh
+    def __str__(self):
+        return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
+
 from .fs_operations.open_operation import open_operation
 
 
@@ -60,13 +67,6 @@ def create_for_path_generator( size: int, st_mode: int
         entry.short_name = entry.full_name
         return entry
     return create_for_path
-
-class FileHandle:
-    def __init__(self, path, real_fh):
-        self.path = path
-        self.real_fh = real_fh
-    def __str__(self):
-        return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
 
 symlink_creation_windows_type = Literal['skip', 'error', 'copy', 'create_lnkfile', 'real_symlink']
 class PassthroughFS(LoggingMixIn,Operations):
