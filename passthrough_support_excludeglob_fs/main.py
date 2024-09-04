@@ -127,8 +127,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         if os.name == 'nt':
             return os.access(right_path, mode)
         else:
-            return os.access(right_path, mode,follow_symlinks=False)
-        return result
+            return os.access(right_path, mode, follow_symlinks=False)
 
     def access(self, path, amode):
         if self._access(path, amode):

@@ -1,4 +1,6 @@
 import os
+import stat
+import errno
 from typing import Dict
 from ..main import FileHandle, FuseOSError
 
