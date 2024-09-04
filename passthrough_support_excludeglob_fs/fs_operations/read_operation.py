@@ -1,6 +1,6 @@
 import os
 import errno
-from fuse import FuseOSError
+from refuse import FuseOSError
 
 def read_operation(self, path, length, offset, fh):
     if not self._access(path, os.R_OK):
