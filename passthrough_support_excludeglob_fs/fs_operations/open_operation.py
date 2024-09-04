@@ -1,6 +1,7 @@
 import os
 import stat
 import errno
+from ..main import FileHandle
 
 def open_operation(self, path, flags) -> int:
     if os.name == 'nt':
@@ -10,7 +11,7 @@ def open_operation(self, path, flags) -> int:
     if stat.S_ISLNK(st_mode):
         return self.open(self.readlink(path), flags)
     if os.path.lexists(right_path):
-        fh = self.FileHandle(right_path, os.open(right_path, flags))
+        fh = FileHandle(right_path, os.open(right_path, flags))
     else:
         if flags & os.O_CREAT:
             return self.create(path, 0o777)
