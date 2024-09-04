@@ -24,6 +24,7 @@ with warnings.catch_warnings(action="ignore"):
 import subprocess
 import pylnk3
 import tempfile
+from .fs_operations.open_operation import open_operation
 
 
 def create_for_path_generator( size: int, st_mode: int
@@ -170,24 +171,7 @@ class PassthroughFS(LoggingMixIn,Operations):
         return set(dirents)
 
     def open(self, path, flags) -> int:
-        if os.name == 'nt':
-            flags = os.O_RDWR | os.O_BINARY
-        right_path = self.get_right_path(path)
-        #print type of the file at right_path with between REG, DIR, SYMLINK
-        st_mode = os.lstat(right_path).st_mode
-        if stat.S_ISLNK(st_mode):
-            return self.open(self.readlink(path), flags)
-        if os.path.lexists(right_path):
-            fh: FileHandle = FileHandle(right_path, os.open(right_path, flags))
-        else:
-            if flags & os.O_CREAT:
-                return self.create(path, 0o777)
-            else:
-                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        #Append fh to file_handles
-        exposed_fh = max(self.file_handles.keys()) + 1 if self.file_handles else 0
-        self.file_handles[exposed_fh] = fh
-        return exposed_fh
+        return open_operation(self, path, flags)
     
     def read(self, path, length, offset, fh):
         if(not self._access(path, os.R_OK)):
