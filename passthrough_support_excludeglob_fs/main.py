@@ -32,6 +32,9 @@ class FileHandle:
         return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
 
 from .fs_operations.open_operation import open_operation
+from .fs_operations.read_operation import read_operation
+from .fs_operations.write_operation import write_operation
+from .fs_operations.release_operation import release_operation
 
 
 def create_for_path_generator( size: int, st_mode: int
@@ -173,29 +176,10 @@ class PassthroughFS(LoggingMixIn,Operations):
         return open_operation(self, path, flags)
     
     def read(self, path, length, offset, fh):
-        if(not self._access(path, os.R_OK)):
-            raise FuseOSError(errno.EACCES)
-        
-        right_path = self.get_right_path(path)
-
-        if os.path.lexists(right_path):
-            os.lseek(self.file_handles[fh].real_fh, offset, os.SEEK_SET)
-            return os.read(self.file_handles[fh].real_fh, length)
-        else:
-            raise FuseOSError(errno.ENOENT)
+        return read_operation(self, path, length, offset, fh)
 
     def write(self, path, buf, offset, fh):
-        if fh not in self.file_handles:
-            raise FuseOSError(errno.EBADF)
-        right_path = self.get_right_path(path)
-
-        if not os.path.lexists(right_path):
-            raise FuseOSError(errno.ENOENT)
-
-        os.lseek(self.file_handles[fh].real_fh, offset, os.SEEK_SET)
-        total_written = os.write(self.file_handles[fh].real_fh, buf)
-        os.fsync(self.file_handles[fh].real_fh)  
-        return total_written
+        return write_operation(self, path, buf, offset, fh)
     
     def chmod(self, path, mode):
         right_path = self.get_right_path(path)
@@ -565,16 +549,7 @@ class PassthroughFS(LoggingMixIn,Operations):
             raise FuseOSError(errno.ENOENT)
 
     def release(self, path, fh):
-        if fh in self.file_handles:
-            try:
-                os.fsync(self.file_handles[fh].real_fh)
-                os.close(self.file_handles[fh].real_fh)
-            except OSError as e:
-                if e.errno != errno.EBADF:
-                    raise
-            del self.file_handles[fh]
-        else:
-            pass
+        return release_operation(self, path, fh)
 
     def fsync(self, path, fdatasync, fh):
         return self.flush(path, fh)
