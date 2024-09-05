@@ -2,27 +2,21 @@
 
 import os
 import re
-import stat
 import sys
-from typing import Any, Callable, Dict, List, Literal, get_args
+from typing import Any, Dict, List, Literal, get_args
 from refuse import _refactor
 _refactor.sys = sys # type: ignore
-from refuse.high import FUSE, FuseOSError, Operations
+from refuse.high import FUSE, Operations
 from .logginng_mixin import LoggingMixIn
-import errno
 from globmatch import glob_match
 import argparse
 from appdirs import user_cache_dir
 import base64
-import psutil
 from pathlib import Path
 import shutil
-import traceback
 import warnings
 with warnings.catch_warnings(action="ignore"):
     from str2type import str2type
-import subprocess
-import pylnk3
 import tempfile
 class FileHandle:
     def __init__(self, path, real_fh):
@@ -56,40 +50,6 @@ from .fs_operations import (
     rename_operation
 )
 
-
-def create_for_path_generator( size: int, st_mode: int
-) -> Callable[[str], pylnk3.PathSegmentEntry]:
-    """
-    Generate a function that creates a PathSegmentEntry for a given path.
-
-    Args:
-        path (str): The path for which to create the entry.
-        size (int): The size of the entry.
-        st_mode (int): The mode of the entry.
-
-    Returns:
-        Callable[[str], pylnk3.PathSegmentEntry]: A function that creates a
-        PathSegmentEntry for a given path.
-    """
-    def create_for_path(path: str) -> pylnk3.PathSegmentEntry:
-        """
-        Create a PathSegmentEntry for a given path.
-
-        Args:
-            path (str): The path for which to create the entry.
-
-        Returns:
-            pylnk3.PathSegmentEntry: The created PathSegmentEntry.
-        """
-        entry = pylnk3.PathSegmentEntry()
-        entry.type = (
-            pylnk3.TYPE_FOLDER if st_mode & 0o40000 else pylnk3.TYPE_FILE
-        )
-        entry.file_size = size
-        entry.full_name = os.path.split(path)[1]
-        entry.short_name = entry.full_name
-        return entry
-    return create_for_path
 
 symlink_creation_windows_type = Literal['skip', 'error', 'copy', 'create_lnkfile', 'real_symlink']
 class PassthroughFS(LoggingMixIn,Operations):
