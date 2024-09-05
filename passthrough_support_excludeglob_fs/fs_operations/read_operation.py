@@ -1,9 +1,10 @@
 import os
 import errno
-from refuse import FuseOSError
+from refuse.high import FuseOSError
+from .access_operation import _access
 
 def read_operation(self, path, length, offset, fh):
-    if not self._access(path, os.R_OK):
+    if not _access(self, path, os.R_OK):
         raise FuseOSError(errno.EACCES)
     
     right_path = self.get_right_path(path)

@@ -1,5 +1,5 @@
 import os
-from fuse import FuseOSError
+from refuse.high import FuseOSError
 import errno
 
 def write_operation(self, path, buf, offset, fh):
