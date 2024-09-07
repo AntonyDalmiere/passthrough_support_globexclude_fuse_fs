@@ -16,7 +16,6 @@ def mkdir_operation(self, path, mode) -> None:
     makedirs(self,parent_dir_right_path, exist_ok=True)
     os.mkdir(right_path, mode)
 
-#path is already passed trhough get_right_path
 def makedirs(self, path:str, exist_ok=False):
     """
     Recursively create directories at the specified path.
@@ -24,6 +23,9 @@ def makedirs(self, path:str, exist_ok=False):
     Args:
         path (str): The path of the directory to be created.
         exist_ok (bool, optional): If True, no exception will be raised if the directory already exists. Defaults to False.
+
+    Warning:
+        The `path` argument must be already passed through the `get_right_path` method.
     """
     # Check if path is cache or full
     current_location: Literal['cache', 'full'] = 'cache' if path.startswith(self.cache_dir) else 'full'
