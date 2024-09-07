@@ -18,12 +18,6 @@ import warnings
 with warnings.catch_warnings(action="ignore"):
     from str2type import str2type
 import tempfile
-class FileHandle:
-    def __init__(self, path, real_fh):
-        self.path = path
-        self.real_fh = real_fh
-    def __str__(self):
-        return f"FileHandle(path={self.path}, real_fh={self.real_fh})"
 
 from .fs_operations import (
     open_operation,
@@ -59,7 +53,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         self.root:str = root
         self.patterns: list[str] = patterns
         self.cache_dir:str = cache_dir
-        self.file_handles: Dict[int, FileHandle] = {} 
         self.overwrite_rename_dest:bool = overwrite_rename_dest
         self.symlink_creation_windows:symlink_creation_windows_type = symlink_creation_windows
         # self.use_ns = True
@@ -126,20 +119,28 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def release(self, path, fh):
         return release_operation(self, path, fh)
+
     def access(self, path, amode):
         return access_operation(self, path, amode)
+
     def fsync(self, path, fdatasync, fh):
         return fsync_operation(self, path, fdatasync, fh)
+
     def flush(self, path, fh):
         return flush_operation(self, path, fh)
+
     def lock(self, path, fh, cmd, lock):
         return lock_operation(self, path, fh, cmd, lock)
+
     def truncate(self, path, length, fh=None):
         return truncate_operation(self, path, length, fh)
+
     def utimens(self, path, times=None):
         return utimens_operation(self, path, times)
+
     def unlink(self, path):
         return unlink_operation(self, path)
+
     def statfs(self, path):
         return statfs_operation(self, path)
     
@@ -160,9 +161,6 @@ class PassthroughFS(LoggingMixIn,Operations):
 
     def create(self, path, mode):
         return create_operation(self, path, mode)
-    
-
-
 
     def get_full_path(self, path):
         p = Path(self.root) / Path(path.lstrip("/"))
@@ -207,6 +205,7 @@ def default_overwrite_rename_dest() -> bool:
         return False
     else:
         return True
+
 def default_symlink_creation_windows() -> symlink_creation_windows_type:
     if os.name != 'nt':
         return 'error'

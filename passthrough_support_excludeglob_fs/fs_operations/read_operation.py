@@ -10,7 +10,7 @@ def read_operation(self, path, length, offset, fh):
     right_path = self.get_right_path(path)
 
     if os.path.lexists(right_path):
-        os.lseek(self.file_handles[fh].real_fh, offset, os.SEEK_SET)
-        return os.read(self.file_handles[fh].real_fh, length)
+        os.lseek(fh, offset, os.SEEK_SET)
+        return os.read(fh, length)
     else:
         raise FuseOSError(errno.ENOENT)
