@@ -1531,7 +1531,8 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
 
         for t in threads:
             t.join()
-
+        import time
+        time.sleep(1)
         with open(normal_file, 'r') as f:
             normal_content = f.read()
         with open(excluded_file, 'r') as f:
