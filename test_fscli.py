@@ -36,7 +36,7 @@ def clean_up(root_dir: str | None, mountpoint_dir: str | None, process: subproce
 def virtual_env(tmp_path) -> Path:
     """Create a virtual environment for testing."""
     venv_dir = tmp_path / "venv"
-    subprocess.check_call(["python3", "-m", "venv", str(venv_dir)])
+    subprocess.check_call(["python3.exe", "-m", "venv", str(venv_dir)])
     if os.name == 'nt':
         subprocess.check_call([str(venv_dir / "Scripts" / "pip"), "install", "."])
     else:
@@ -69,7 +69,7 @@ def test_cli(command_location: Path,complementary_option):
     process = subprocess.Popen(cli_command)
 
     # Wait for the filesystem to mount
-    time.sleep(2)
+    time.sleep(4)
 
     # Verify the filesystem is mounted
     try:
@@ -148,7 +148,7 @@ def test_cli_cache(command_location,complementary_option):
     process = subprocess.Popen(cli_command)
 
     # Wait for the filesystem to mount
-    time.sleep(2)
+    time.sleep(4)
 
     # Verify the filesystem is mounted
     try:
@@ -243,7 +243,7 @@ def test_cli_debug(command_location, debug):
 
 
     # Wait for the filesystem to mount
-    time.sleep(2)
+    time.sleep(4)
 
     # Verify the filesystem is mounted
     try:
@@ -299,7 +299,7 @@ def test_cli_escaping_patterns(command_location):
     process = subprocess.Popen(cli_command)
 
     # Wait for the filesystem to mount
-    time.sleep(2)
+    time.sleep(4)
 
     # Verify the filesystem is mounted
     try:
@@ -360,7 +360,7 @@ def test_cli_escaping_mountdir(command_location):
     process = subprocess.Popen(cli_command)
 
     # Wait for the filesystem to mount
-    time.sleep(2)
+    time.sleep(4)
 
     # Verify the filesystem is mounted
     try:
@@ -399,7 +399,7 @@ def test_cli_escaping_rootdir(command_location):
     process = subprocess.Popen(cli_command)
 
     # Wait for the filesystem to mount
-    time.sleep(2)
+    time.sleep(4)
 
     # Verify the filesystem is mounted
     try:
@@ -438,7 +438,7 @@ def test_cli_escaping_cachedir(command_location):
     process = subprocess.Popen(cli_command)
 
     # Wait for the filesystem to mount
-    time.sleep(2)
+    time.sleep(4)
 
     # Verify the filesystem is mounted
     try:
