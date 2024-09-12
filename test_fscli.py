@@ -36,10 +36,11 @@ def clean_up(root_dir: str | None, mountpoint_dir: str | None, process: subproce
 def virtual_env(tmp_path) -> Path:
     """Create a virtual environment for testing."""
     venv_dir = tmp_path / "venv"
-    subprocess.check_call(["python3.exe", "-m", "venv", str(venv_dir)])
     if os.name == 'nt':
+        subprocess.check_call(["python3.exe", "-m", "venv", str(venv_dir)])
         subprocess.check_call([str(venv_dir / "Scripts" / "pip"), "install", "."])
     else:
+        subprocess.check_call(["python3", "-m", "venv", str(venv_dir)])
         subprocess.check_call([str(venv_dir / "bin" / "pip"), "install", "."])
     return venv_dir
 
@@ -384,7 +385,8 @@ def test_cli_escaping_rootdir(command_location):
     """Test the CLI of the filesystem with escaping in rootdir."""
 
     # Create temporary directories for root and mountpoint
-    root_dir = tempfile.mkdtemp(prefix="root\\,dir\\=")
+    root_dir = tempfile.mkdtemp(prefix="root,dir=")
+    root_dir_to_pass = root_dir.replace(',', '\\,').replace('=', '\\=')
     mountpoint_dir = determine_mountdir_based_on_os()
 
     print(f'root_dir: {root_dir}')
@@ -394,7 +396,7 @@ def test_cli_escaping_rootdir(command_location):
         str(command_location / "passthrough_support_excludeglob_fs"),
         mountpoint_dir,
         "-o",
-        f"root={root_dir}"
+        f"root={root_dir_to_pass}"
     ]
     process = subprocess.Popen(cli_command)
 
@@ -425,7 +427,8 @@ def test_cli_escaping_cachedir(command_location):
     # Create temporary directories for root and mountpoint
     root_dir = tempfile.mkdtemp()
     mountpoint_dir = determine_mountdir_based_on_os()
-    cache_dir = tempfile.mkdtemp(prefix="cache\\,dir\\=")
+    cache_dir = tempfile.mkdtemp(prefix="cache,dir=")
+    cache_dir_to_pass = cache_dir.replace(",", "\\,").replace("=", "\\=")
 
 
     # Run the CLI command in a separate process with escaping
@@ -433,7 +436,7 @@ def test_cli_escaping_cachedir(command_location):
         str(command_location / "passthrough_support_excludeglob_fs"),
         mountpoint_dir,
         "-o",
-        f"root={root_dir},cache_dir={cache_dir}"
+        f"root={root_dir},cache_dir={cache_dir_to_pass}"
     ]
     process = subprocess.Popen(cli_command)
 
