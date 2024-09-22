@@ -1081,11 +1081,12 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
         file_path = os.path.join(self.mounted_dir, 'large_file_test.bin')
         size = 1 * 1024 * 1024 * 1024  # 1 GB
         chunk_size = 10 * 1024 * 1024  # 10 MB
-        
+        byte_written = 0
         # Write
         with open(file_path, 'wb') as f:
             for _ in range(size // chunk_size):
-                f.write(random.randbytes(chunk_size))
+                print(f'Progress: {_}/{size // chunk_size}',flush=True)
+                byte_written += f.write(random.randbytes(chunk_size))
         
         # Read and verify
         with open(file_path, 'rb') as f:
@@ -1095,8 +1096,10 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
                 if not chunk:
                     break
                 read_size += len(chunk)
-        
-        self.assertEqual(read_size, size)
+        #Get the size of the file then assert it
+        filesize = os.path.getsize(file_path)
+        self.assertEqual(byte_written, filesize)
+        self.assertEqual(read_size, byte_written)
 
     def test_directory_mtime_update(self):
         dir_path = os.path.join(self.mounted_dir, 'mtime_test_dir')
