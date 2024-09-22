@@ -1,2 +1,5 @@
+import os
+
+
 def flush_operation(self, path, fh):
-    pass
+    os.fsync(fh)
