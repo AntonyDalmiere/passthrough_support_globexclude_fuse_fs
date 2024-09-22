@@ -8,5 +8,4 @@ def write_operation(self, path, buf, offset, fh):
 
     os.lseek(fh, offset, os.SEEK_SET)
     total_written = os.write(fh, buf)
-    os.fsync(fh)  
     return total_written
