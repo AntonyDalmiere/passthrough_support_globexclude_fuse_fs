@@ -593,7 +593,7 @@ class TestFSOperationsWithExclusion(unittest.TestCase):
             for i in range(0, max_counter, chunk_size):
                 chunk = ''.join(str(j) for j in range(i, min(i + chunk_size, max_counter)))
                 f.write(chunk.encode())
-
+        time.sleep(0.5)
         # Read in chunks and verify
         total_size = 0
         with open(large_file_path, 'rb') as f:
