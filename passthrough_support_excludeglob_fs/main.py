@@ -232,7 +232,7 @@ def default_rellinks() -> bool:
     else:
         return False
     
-def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=True,fusedebug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest(),debug:bool=False,log_in_file:str|None=None,log_in_console:bool=True,log_in_syslog:bool=False,symlink_creation_windows:symlink_creation_windows_type=default_symlink_creation_windows(),rellinks:bool=default_rellinks()):
+def start_passthrough_fs(mountpoint:str, root:str, patterns:None|list[str]=None, cache_dir:str|None=None,uid:int=default_uid_and_gid()[0],gid:int=default_uid_and_gid()[1],foreground:bool=True,nothreads:bool=False,fusedebug:bool=False, overwrite_rename_dest:bool=default_overwrite_rename_dest(),debug:bool=False,log_in_file:str|None=None,log_in_console:bool=True,log_in_syslog:bool=False,symlink_creation_windows:symlink_creation_windows_type=default_symlink_creation_windows(),rellinks:bool=default_rellinks()):
     if not root:
         raise ValueError("Root directory must be specified")
     if patterns:
