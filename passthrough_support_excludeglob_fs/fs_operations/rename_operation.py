@@ -6,7 +6,7 @@ import traceback
 from refuse.high import FuseOSError
 from .access_operation import _access
 from .mkdir_operation import makedirs
-
+from .unlink_operation import unlink_operation
 def rename_operation(self, old, new):
     if old in self.renameExcludedSourceFiles:
         self.renameExcludedSourceFiles.remove(old)
@@ -36,7 +36,6 @@ def rename_operation(self, old, new):
                 pass
 
         def recursive_copy(old_path, new_path):
-            print(f'Moving {old_path} to {new_path}')
             right_old_path = self.get_right_path(old_path)
             right_new_path = self.get_right_path(new_path)
             if stat.S_ISDIR(self.getattr(old_path)['st_mode']):  # Directory
@@ -49,7 +48,7 @@ def rename_operation(self, old, new):
                 source_path = self.get_right_path(old_path)
                 destination_path = self.get_right_path(new_path)
                 if os.path.lexists(destination_path):
-                    os.unlink(destination_path)
+                    unlink_operation(self,new_path)
                 shutil.copy2(source_path, destination_path, follow_symlinks=False)
             else:  # File
                 #Call makedirs to create the parent directory if it doesn't exist (when parent is excluded but child is not or vice versa)
@@ -57,9 +56,12 @@ def rename_operation(self, old, new):
                 if os.name == 'nt':
                     #Use native Ctype Win32 API to rename file
                     from ctypes import windll
-                    windll.kernel32.MoveFileExW(right_old_path, right_new_path, 0)
+                    win_ret = windll.kernel32.MoveFileExW(right_old_path, right_new_path, 0x1)#0x1 = MOVEFILE_REPLACE_EXISTING
+                    if not win_ret:
+                        error_code = windll.kernel32.GetLastError()
+                        raise FuseOSError(errno.ENOENT)
                 else:
-                    os.rename(right_old_path, right_new_path)
+                    os.replace(right_old_path, right_new_path)
 
         recursive_copy(old, new)
 
