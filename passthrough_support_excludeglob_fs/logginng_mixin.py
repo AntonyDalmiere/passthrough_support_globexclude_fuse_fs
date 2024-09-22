@@ -17,7 +17,7 @@ class LoggingMixIn:
     """Mixin for logging operations."""
 
     def __init__(self, enable: bool, log_in_file: str | None,log_in_console: bool, log_in_syslog: bool) -> None:
-
+        self.enable = enable
         self.log: logging.Logger = logging.getLogger('passthrough_support_excludeglob_fs')
         self.log.setLevel(logging.DEBUG)  # Set the logging level to DEBUG
         if not enable:
@@ -72,4 +72,6 @@ class LoggingMixIn:
             ret = str(e)
             raise
         finally:
-            self.log.debug( '%s(p=%s, %s) => %s', op, path, repr(args), ret)
+            # We add a check because logging large objects even on NullHandler can cause memory leaks
+            if self.enable:
+                self.log.debug('%s(p=%s, %s) => %s', op, path, repr(args), ret)
