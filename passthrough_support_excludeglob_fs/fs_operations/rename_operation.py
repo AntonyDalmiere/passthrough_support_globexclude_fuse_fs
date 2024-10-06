@@ -59,7 +59,9 @@ def rename_operation(self, old, new):
                     win_ret = windll.kernel32.MoveFileExW(right_old_path, right_new_path, 0x1)#0x1 = MOVEFILE_REPLACE_EXISTING
                     if not win_ret:
                         error_code = windll.kernel32.GetLastError()
-                        raise FuseOSError(errno.ENOENT)
+                        raise FuseOSError(error_code)
+                        # raise FuseOSError(errno.ENOENT)
+
                 else:
                     os.replace(right_old_path, right_new_path)
 
