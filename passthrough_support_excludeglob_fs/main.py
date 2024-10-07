@@ -8,6 +8,7 @@ from refuse import _refactor
 _refactor.sys = sys # type: ignore
 from refuse.high import FUSE, Operations
 from .logginng_mixin import LoggingMixIn
+from .concurrency_controller import ConcurrencyControllerMixIn
 from globmatch import glob_match
 import argparse
 from appdirs import user_cache_dir
@@ -46,11 +47,12 @@ from .fs_operations import (
 
 
 symlink_creation_windows_type = Literal['skip', 'error', 'copy', 'create_lnkfile', 'real_symlink']
-class PassthroughFS(LoggingMixIn,Operations):
-    def __init__(self, root, patterns, cache_dir,overwrite_rename_dest,debug,log_in_file,log_in_console,log_in_syslog,symlink_creation_windows:symlink_creation_windows_type,mountpoint):
 
-        LoggingMixIn.__init__(self, enable=debug,log_in_file=log_in_file,log_in_console=log_in_console,log_in_syslog=log_in_syslog)
-        self.root:str = root
+class PassthroughFS(ConcurrencyControllerMixIn, LoggingMixIn, Operations):
+    def __init__(self, root, patterns, cache_dir, overwrite_rename_dest, debug, log_in_file, log_in_console, log_in_syslog, symlink_creation_windows: symlink_creation_windows_type, mountpoint):
+        ConcurrencyControllerMixIn.__init__(self)
+        LoggingMixIn.__init__(self, enable=debug, log_in_file=log_in_file, log_in_console=log_in_console, log_in_syslog=log_in_syslog)
+        self.root: str = root
         self.patterns: list[str] = patterns
         self.cache_dir:str = cache_dir
         self.overwrite_rename_dest:bool = overwrite_rename_dest
@@ -58,7 +60,6 @@ class PassthroughFS(LoggingMixIn,Operations):
         # self.use_ns = True
         self.mountpoint:str = mountpoint
 
-        #create a property to store list of dest file that must be ignored when they are the source of a rename
         self.renameExcludedSourceFiles: list[str] = []
         self.renameAppendLnkToFilenameFiles: list[str] = []
 
@@ -223,8 +224,10 @@ def default_symlink_creation_windows() -> symlink_creation_windows_type:
     except OSError:
         return 'error'
     finally:
-        os.remove(temp_dest_path)
-        os.remove(temp_source_path)
+        if os.path.exists(temp_dest_path):
+            os.remove(temp_dest_path)
+        if os.path.exists(temp_source_path):
+            os.remove(temp_source_path)
      
 def default_rellinks() -> bool:
     if os.name == 'nt':
