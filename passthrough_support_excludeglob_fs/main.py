@@ -268,6 +268,17 @@ def split_escaped(separator: str, value: str) -> List[str]:
     return re.split(rf'(?<!\\){separator}', value)
 
 def cli() -> None:
+    # Check if no arguments provided - launch GUI
+    if len(sys.argv) == 1:
+        try:
+            from .gui import launch_gui
+            launch_gui()
+            return
+        except ImportError as e:
+            print(f"Error: GUI dependencies not available: {e}")
+            print("Please install tkinter or provide command-line arguments.")
+            sys.exit(1)
+    
     parser = argparse.ArgumentParser(description="PassthroughFS")
     parser.add_argument("mountpoint", help="Mount point for the filesystem")
     parser.add_argument("-o", "--options", help="Mount options")

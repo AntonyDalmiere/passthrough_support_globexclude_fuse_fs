@@ -12,7 +12,7 @@ PassthroughSupportExcludeGlobFS is a user-space filesystem (FUSE) written in Pyt
 - **Union Mount:** Combine the contents of two directories into a single, unified view.
 - **Glob Pattern Exclusion:** Fine-grained control over which files and directories are included or excluded from two directories.
 - **Cross-Platform:** Works seamlessly on Linux, macOS (in theory but untested), and Windows.
-- **Easy to Use:** Simple CLI interface and Python API for integration into your projects.
+- **Easy to Use:** Simple CLI interface, intuitive GUI, and Python API for integration into your projects.
 
 ## Use Cases
 
@@ -31,6 +31,10 @@ PassthroughSupportExcludeGlobFS is a user-space filesystem (FUSE) written in Pyt
     - **Linux:** Install the `fuse` package using your distribution's package manager (e.g., `apt-get install fuse` on Debian/Ubuntu).
     - **macOS:** Install [OSXFUSE](https://osxfuse.github.io/).
     - **Windows:** Install [WinFsp](https://winfsp.dev/).
+- **tkinter (for GUI mode - optional):**
+    - **Linux:** Install the `python3-tk` package (e.g., `apt-get install python3-tk` on Debian/Ubuntu).
+    - **macOS:** Usually included with Python installation.
+    - **Windows:** Usually included with Python installation.
 
 ### Installing PassthroughSupportExcludeGlobFS
 
@@ -39,6 +43,35 @@ pip install passthrough-support-excludeglob-fs
 ```
 
 ## Usage
+
+### Graphical User Interface (GUI)
+
+PassthroughFS now includes a user-friendly GUI for easy configuration. To launch the GUI, simply run the command without any arguments:
+
+```bash
+passthrough_support_excludeglob_fs
+```
+
+The GUI provides:
+- **Main Options** (always visible):
+  - Mountpoint selection with browse dialog
+  - Root directory selection with browse dialog
+  - Exclude patterns (colon-separated)
+
+- **Advanced Options** (collapsible):
+  - Cache directory
+  - Debug mode
+  - FUSE debug
+  - Multi-threading options
+  - Logging configuration
+  - Platform-specific options (UID/GID on Unix, Symlink handling on Windows)
+
+- **Control Buttons**:
+  - **Start**: Validates configuration and starts the filesystem
+  - **Stop**: Unmounts the filesystem
+  - **Status Display**: Shows real-time status and configuration
+
+The GUI is cross-platform compatible and uses the standard tkinter library included with Python.
 
 ### Command-Line Interface
 
